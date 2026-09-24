@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pt
+models/*.task
+.vscode/
+# CAD en la pose de exportación original; el que se usa es el de HOME
+Ensamble_manipulador_solo.glb

@@ -1,0 +1,6 @@
+# Python 3.12 (MediaPipe falla en 3.9 si hay TensorFlow instalado)
+ultralytics>=8.4      # YOLO (arrastra PyTorch)
+mediapipe>=1.0        # Hand Landmarker
+opencv-python>=4.10
+pyserial>=3.5
+numpy

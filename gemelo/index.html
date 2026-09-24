@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pólux · gemelo digital</title>
+<meta name="description" content="Pólux, gemelo digital del brazo de 3 GDL: simulador del firmware v7, control del robot real por USB y seguimiento con cámara, desde el navegador.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three/three.module.min.js",
+  "three/addons/": "./vendor/three/addons/"
+} }
+</script>
+</head>
+<body>
+<div class="app">
+
+  <main class="visor" id="visor">
+    <div class="visor-barra visor-izq">
+      <div class="segmented" id="segModo" role="group" aria-label="Robot">
+        <button class="on" data-modo="digital" title="ESP32 simulada en el navegador (firmware v7)">Digital</button>
+        <button data-modo="real" title="ESP32 por USB (Web Serial, Chrome o Edge)">Real</button>
+      </div>
+    </div>
+    <div class="visor-barra visor-der">
+      <div class="segmented" id="segInteraccion" role="group" aria-label="Cómo mover">
+        <button class="on" data-i="articulaciones" title="Arrastra cada pieza para girar su eje">Articulaciones</button>
+        <button data-i="punto" title="Mueve el punto de agarre y el brazo lo sigue">Punto</button>
+      </div>
+      <button class="btn-icono" id="bEncuadrar" title="Volver a la vista inicial">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5.5V2h3.5M14 5.5V2h-3.5M2 10.5V14h3.5M14 10.5V14h-3.5"/><circle cx="8" cy="8" r="2"/></svg>
+      </button>
+    </div>
+
+    <div class="etiqueta-eje" id="etiquetaEje" hidden></div>
+    <div class="aviso" id="aviso" role="status" hidden></div>
+    <div class="visor-vacio" id="visorVacio" hidden><b>Sin robot conectado</b></div>
+
+    <!-- Controles del visor: el botón que se usa se oscurece -->
+    <div class="raton" id="raton" aria-hidden="true">
+      <svg viewBox="0 0 40 60">
+        <path class="r-cuerpo" d="M4 26V42a16 16 0 0 0 32 0V26Z"/>
+        <path class="r-boton" data-b="1" d="M4 24V20A16 16 0 0 1 19 4.03V24Z"/>
+        <path class="r-boton" data-b="2" d="M36 24V20A16 16 0 0 0 21 4.03V24Z"/>
+        <rect class="r-boton" data-b="4" x="17.5" y="8" width="5" height="11" rx="2.5"/>
+      </svg>
+      <ul>
+        <li data-b="1"><i></i><span id="ratonIzq">Orbitar</span></li>
+        <li data-b="4"><i></i><span>Zoom · clic desplaza</span></li>
+        <li data-b="2"><i></i><span>Desplazar</span></li>
+      </ul>
+    </div>
+
+    <div class="visor-pie">
+      <div class="miniatura" id="miniatura" hidden title="Lo que ve la cámara"></div>
+      <div class="estado-fw" id="estadoFw" title="Último mensaje del firmware">
+        <span class="ocupado" id="ocupado">quieto</span>
+        <span class="mono" id="msgFw">—</span>
+      </div>
+    </div>
+    <div class="cargando" id="cargando">Cargando modelo…</div>
+  </main>
+
+  <aside class="lateral">
+
+    <section class="panel panel-global">
+      <header class="panel-cab">
+        <h1>Pólux</h1>
+        <button class="btn btn-alto" id="bAlto" title="Detener todo (Esc)">ALTO</button>
+      </header>
+      <div class="conexion" id="conexion" hidden>
+        <p id="conexionTexto">ESP32 desconectada</p>
+        <button class="btn btn-sec" id="bConectar">Conectar ESP32</button>
+      </div>
+      <p class="banda-aviso" id="avisoWeb" hidden>Control en la página del ESP32 · pulsa <b>Control PC</b> ahí</p>
+      <p class="banda-aviso" id="avisoCal" hidden>Sin calibrar · E1 y E2 esperan <b>Calibrar</b></p>
+    </section>
+
+    <section class="panel">
+      <header class="panel-cab compacto"><h2>Articulaciones</h2></header>
+      <div id="ejes"></div>
+    </section>
+
+    <section class="panel">
+      <header class="panel-cab compacto">
+        <h2>Punto de agarre</h2>
+        <span class="alcance" id="alcance"></span>
+      </header>
+      <div class="xyz" title="mm · X lateral, Y altura sobre el piso, Z hacia adelante con la base en 0°">
+        <label><span>X</span><input type="number" id="pX" step="1"><em>mm</em></label>
+        <label><span>Y</span><input type="number" id="pY" step="1"><em>mm</em></label>
+        <label><span>Z</span><input type="number" id="pZ" step="1"><em>mm</em></label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <header class="panel-cab compacto">
+        <h2>Cámara</h2>
+        <button class="btn btn-sec chico" id="bCamara">Abrir</button>
+      </header>
+      <select id="camSelect" class="selector" hidden title="Cámara"></select>
+      <div class="toggles">
+        <button class="toggle" data-v="manos" title="Detectar manos (MediaPipe)">Manos</button>
+        <button class="toggle" data-v="personas" title="Detectar personas (MediaPipe)">Personas</button>
+        <button class="toggle" data-v="seguir" title="El brazo sigue la mano abierta (4 dedos). Con menos dedos se detiene. Sin mano, la base sigue a la persona.">Seguir</button>
+      </div>
+      <p class="estado-vision mono" id="estadoVision"></p>
+      <details class="sub-plegable">
+        <summary>Pose de la cámara</summary>
+        <div class="pose-cam">
+          <label>X<input type="number" data-k="x" step="10"></label>
+          <label>Y<input type="number" data-k="y" step="10"></label>
+          <label>Z<input type="number" data-k="z" step="10"></label>
+          <label title="Giro en Y · 0° mira hacia +Z">Giro<input type="number" data-k="giro" step="5"></label>
+          <label title="+ hacia arriba">Incl.<input type="number" data-k="inclinacion" step="5"></label>
+          <label title="Campo de visión horizontal">FOV<input type="number" data-k="fov" step="1" min="20" max="120"></label>
+        </div>
+      </details>
+    </section>
+
+    <section class="panel">
+      <header class="panel-cab compacto"><h2>Rutinas</h2></header>
+      <div class="fila-botones">
+        <button class="btn btn-sec" data-rutina="CAL" title="Busca los switches de E1 y E2 y deja el brazo en HOME">Calibrar</button>
+        <button class="btn btn-sec" data-rutina="HOME">HOME</button>
+        <button class="btn btn-sec" data-rutina="SALUDO">Saludo</button>
+      </div>
+    </section>
+
+    <details class="panel plegable">
+      <summary class="panel-cab compacto"><h2>Ajustes</h2><span class="chevron">▾</span></summary>
+      <div class="ajustes">
+        <h3 title="rpm del motor · rampa en rpm/s">Velocidad</h3>
+        <div class="vel-fila" data-grupo="0">
+          <span>Base</span>
+          <input type="number" class="vel" min="2" max="30" step="1" title="rpm">
+          <input type="number" class="acel" min="10" max="400" step="10" title="rpm/s">
+        </div>
+        <div class="vel-fila" data-grupo="1">
+          <span>Eslabones</span>
+          <input type="number" class="vel" min="2" max="120" step="1" title="rpm">
+          <input type="number" class="acel" min="10" max="400" step="10" title="rpm/s">
+        </div>
+
+        <div id="ajustesSim">
+          <h3>Simulador</h3>
+          <label class="interruptor" title="v7 mueve un eje a la vez">
+            <input type="checkbox" id="simSimultaneo" role="switch">
+            <span class="switch" aria-hidden="true"><i></i></span>
+            <span>Ejes a la vez</span>
+          </label>
+          <div class="fila-etiqueta">
+            <span>Tiempo</span>
+            <div class="segmented chico" id="segTiempo">
+              <button class="on" data-x="1">×1</button><button data-x="2">×2</button><button data-x="5">×5</button>
+            </div>
+          </div>
+        </div>
+
+        <h3 title="Cómo se ve cada ángulo en el modelo. Se guarda en este navegador.">Gemelo</h3>
+        <div class="gemelo-fila" data-eje="0"><span>Base</span><label><input type="checkbox" class="invertir"> invertir</label><label>offset <input type="number" class="offset" step="1"> °</label></div>
+        <div class="gemelo-fila" data-eje="1"><span>Eslabón 1</span><label><input type="checkbox" class="invertir"> invertir</label><label>offset <input type="number" class="offset" step="0.5"> °</label></div>
+        <div class="gemelo-fila" data-eje="2"><span>Eslabón 2</span><label><input type="checkbox" class="invertir"> invertir</label><label>offset <input type="number" class="offset" step="0.5"> °</label></div>
+        <button class="btn-texto" id="bCalDefecto">Restablecer</button>
+      </div>
+    </details>
+
+    <details class="panel plegable">
+      <summary class="panel-cab compacto"><h2>Consola</h2><span class="chevron">▾</span></summary>
+      <div class="consola" id="consola" aria-live="off"></div>
+      <form class="consola-linea" id="consolaForm">
+        <input id="consolaInput" class="mono" autocomplete="off" spellcheck="false" placeholder="GOTO E1 45">
+      </form>
+    </details>
+
+  </aside>
+</div>
+
+<!-- Riel de articulación, copiado de la página del ESP32: pista, barra de
+     HOME al real, casita en HOME, punto rojo = real, pulgar blanco = referencia -->
+<template id="tplEje">
+  <div class="eje">
+    <div class="eje-cab">
+      <span class="eje-nombre"></span>
+      <span class="eje-valores mono">
+        <b class="v-ref"><input type="number" class="eje-num" step="0.1" aria-label="Referencia en grados"></b>
+        <i class="v-real"></i>
+      </span>
+    </div>
+    <div class="eje-control">
+      <button class="jog" data-vis="-1" aria-label="Mover a la izquierda">‹</button>
+      <div class="sl" tabindex="0" role="slider">
+        <div class="sl-pista"></div>
+        <div class="sl-barra"></div>
+        <div class="sl-casa"><svg viewBox="0 0 12 12"><path d="M1.5 6L6 2l4.5 4M3 5v5h6V5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg></div>
+        <div class="sl-real"></div>
+        <div class="sl-ref"></div>
+      </div>
+      <button class="jog" data-vis="1" aria-label="Mover a la derecha">›</button>
+    </div>
+  </div>
+</template>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

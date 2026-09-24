@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manipulador 3 GDL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="surface-dark">
+<div class="app">
+
+  <!-- ===================== Cámara ===================== -->
+  <section class="vista">
+    <header class="vista-cab">
+      <h1>Manipulador 3 GDL</h1>
+      <div class="chips">
+        <span class="chip" id="chCam">Cámara —</span>
+        <span class="chip" id="chVis">Visión apagada</span>
+        <span class="chip" id="chObj">Sin objetivo</span>
+      </div>
+    </header>
+    <div class="video">
+      <img id="video" src="/video" alt="Cámara">
+      <p class="video-vacio" id="sinCam">Esperando cámara…</p>
+    </div>
+  </section>
+
+  <!-- ===================== Panel ===================== -->
+  <aside class="panel">
+    <div class="panel-cab">
+      <div class="conexion">
+        <span class="punto" id="pConn"></span>
+        <div class="conexion-txt">
+          <b id="tConn">Sin conexión</b>
+          <span class="secondary small" id="tConn2">buscando ESP32…</span>
+        </div>
+        <select id="selPuerto" title="Puerto serial"></select>
+      </div>
+      <button class="alto" id="bAlto" title="Esc">ALTO <kbd>Esc</kbd></button>
+      <p class="msg" id="msg"></p>
+      <p class="aviso" id="aviso" hidden></p>
+    </div>
+
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="control" class="sel">Control</button>
+      <button role="tab" data-tab="vision">Visión</button>
+      <button role="tab" data-tab="consola">Consola</button>
+    </nav>
+
+    <div class="panel-cuerpo">
+
+      <!-- ---------- Control ---------- -->
+      <div class="tab" id="tab-control">
+        <div class="fila">
+          <button class="btn" id="bCal">Calibrar</button>
+          <button class="btn" id="bHome">HOME</button>
+          <button class="btn" id="bSaludo">Saludo</button>
+        </div>
+        <div class="fila sw">
+          <span id="sw1">SW1</span><span id="sw2">SW2</span><span id="sw3">SW3</span>
+        </div>
+
+        <div class="card">
+          <div class="card-cab"><h2>Ejes</h2>
+            <span class="leyenda"><i class="lg-ref"></i>objetivo <i class="lg-real"></i>real</span></div>
+          <div id="ejes"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-cab"><h2>Velocidad</h2></div>
+          <div id="grupos"></div>
+          <p class="info mono" id="ult"></p>
+        </div>
+      </div>
+
+      <!-- ---------- Visión ---------- -->
+      <div class="tab" id="tab-vision" hidden>
+        <div class="card">
+          <div class="card-cab">
+            <h2>Visión</h2>
+            <label class="toggle"><input type="checkbox" id="tVision"><span></span></label>
+          </div>
+          <p class="info" id="visEstado">Apagada</p>
+          <dl class="datos mono" id="visDatos"></dl>
+        </div>
+
+        <div class="card">
+          <div class="card-cab">
+            <h2>Seguimiento</h2>
+            <label class="toggle"><input type="checkbox" id="tSeg"><span></span></label>
+          </div>
+          <p class="info" id="segEstado">Apagado</p>
+          <dl class="datos mono" id="segDatos"></dl>
+          <div class="seg-modo" id="segCam">
+            <button data-v="fija">Cámara fija</button>
+            <button data-v="base">Cámara en la base</button>
+          </div>
+          <div id="pSeg"></div>
+          <div class="sub">
+            <h3>Control con la mano</h3>
+            <p class="info">Con la palma cerca el robot fija la mano. Mientras muestres los dedos indicados la sigue
+              (base con la posición horizontal, eslabón 1 con la altura). Con menos dedos se pausa.</p>
+          </div>
+          <div id="pMano"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-cab"><h2>Detección</h2></div>
+          <div id="pVis"></div>
+          <div class="lin">
+            <span>Cámara</span>
+            <select id="selCam"><option>0</option><option>1</option><option>2</option><option>3</option></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---------- Consola ---------- -->
+      <div class="tab" id="tab-consola" hidden>
+        <div class="consola mono" id="log"></div>
+        <form class="enviar" id="fCmd" autocomplete="off">
+          <input class="mono" id="iCmd" placeholder="GOTO B 15" spellcheck="false">
+          <button class="btn">Enviar</button>
+        </form>
+        <div class="fila rapidos">
+          <button class="btn chico" data-c="PING">PING</button>
+          <button class="btn chico" data-c="STATE?">STATE?</button>
+          <button class="btn chico" data-c="MODE?">MODE?</button>
+          <button class="btn chico" data-c="HELP">HELP</button>
+        </div>
+        <p class="info">Protocolo: <code>GOTO &lt;B|E1|E2&gt; &lt;°&gt;</code> · <code>POSE b e1 e2</code> (NA para omitir) ·
+          <code>VEL &lt;B|E&gt; rpm [rpm/s]</code> · <code>PULSOS &lt;B|E&gt; 200|800|1000</code> · <code>CAL HOME SALUDO STOP</code>.
+          ↑/↓ recorren el historial.</p>
+      </div>
+    </div>
+  </aside>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>
