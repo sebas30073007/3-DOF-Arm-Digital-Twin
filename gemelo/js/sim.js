@@ -41,7 +41,7 @@ export class SimESP32 {
     this.rechazos = 0;
     this.ultimo = [-1, 0, 0];          // eje, grados, segundos del último movimiento
     this.t = 0;
-    this.simultaneo = false;
+    this.simultaneo = true;            // v7 real mueve uno a la vez; se cambia en Ajustes
     this.escala = 1;                   // velocidad del tiempo simulado
     this.msg = "";
     this.setMsg("Simulador listo (v7)");

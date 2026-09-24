@@ -103,10 +103,16 @@
         <button class="btn btn-sec chico" id="bCamara">Abrir</button>
       </header>
       <select id="camSelect" class="selector" hidden title="Cámara"></select>
-      <div class="toggles">
-        <button class="toggle" data-v="manos" title="Detectar manos (MediaPipe)">Manos</button>
-        <button class="toggle" data-v="personas" title="Detectar personas (MediaPipe)">Personas</button>
-        <button class="toggle" data-v="seguir" title="El brazo sigue la mano abierta (4 dedos). Con menos dedos se detiene. Sin mano, la base sigue a la persona.">Seguir</button>
+      <div class="camara-fila apagada">
+        <div class="segmented chico" id="segObjeto" role="group" aria-label="Qué detectar">
+          <button class="on" data-v="manos" title="Detectar manos (MediaPipe)">Manos</button>
+          <button data-v="personas" title="Detectar personas (MediaPipe)">Personas</button>
+        </div>
+        <label class="interruptor" title="Manos: el punto de agarre sigue a la mano abierta (4 dedos); con menos dedos se detiene. Personas: la base gira hacia la persona.">
+          <input type="checkbox" id="swSeguir" role="switch">
+          <span class="switch" aria-hidden="true"><i></i></span>
+          <span>Seguir</span>
+        </label>
       </div>
       <p class="estado-vision mono" id="estadoVision"></p>
       <details class="sub-plegable">
@@ -137,7 +143,7 @@
         <h3 title="rpm del motor · rampa en rpm/s">Velocidad</h3>
         <div class="vel-fila" data-grupo="0">
           <span>Base</span>
-          <input type="number" class="vel" min="2" max="30" step="1" title="rpm">
+          <input type="number" class="vel" min="2" max="50" step="1" title="rpm">
           <input type="number" class="acel" min="10" max="400" step="10" title="rpm/s">
         </div>
         <div class="vel-fila" data-grupo="1">
@@ -149,7 +155,7 @@
         <div id="ajustesSim">
           <h3>Simulador</h3>
           <label class="interruptor" title="v7 mueve un eje a la vez">
-            <input type="checkbox" id="simSimultaneo" role="switch">
+            <input type="checkbox" id="simSimultaneo" role="switch" checked>
             <span class="switch" aria-hidden="true"><i></i></span>
             <span>Ejes a la vez</span>
           </label>

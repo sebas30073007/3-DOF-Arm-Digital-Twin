@@ -232,20 +232,15 @@ h3:first-child { margin-top: 0; }
 
 /* ---- cámara ---- */
 
+.camara-fila { display: flex; justify-content: space-between; align-items: center; gap: var(--space-md); }
+.camara-fila.apagada { opacity: 0.45; pointer-events: none; }
+.segmented button.cargando { cursor: progress; opacity: 0.6; }
+
 .btn.chico { padding: 4px var(--space-md); font-size: 12px; }
 .selector {
   width: 100%; margin-bottom: var(--space-sm); border: 1px solid var(--linea); border-radius: var(--radius-md);
   padding: 5px var(--space-sm); font: inherit; font-size: 12px; background: var(--technical-white); color: var(--graphite);
 }
-.toggles { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-sm); }
-.toggle {
-  border: 1px solid var(--linea-fuerte); background: var(--technical-white); border-radius: var(--radius-md);
-  padding: 6px 0; font-weight: 600; font-size: 12px; cursor: pointer; color: var(--graphite);
-}
-.toggle:hover:not(:disabled) { border-color: var(--graphite); }
-.toggle.on { background: var(--graphite); border-color: var(--graphite); color: var(--technical-white); }
-.toggle.cargando { opacity: 0.6; cursor: progress; }
-.toggle:disabled { opacity: 0.4; cursor: not-allowed; }
 .estado-vision { margin: var(--space-sm) 0 0; font-size: 11.5px; color: var(--alloy); min-height: 1.4em; }
 .sub-plegable { margin-top: var(--space-sm); font-size: 12px; }
 .sub-plegable summary { cursor: pointer; color: var(--alloy); font-weight: 600; }

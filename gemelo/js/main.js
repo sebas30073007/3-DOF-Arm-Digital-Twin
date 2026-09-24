@@ -436,11 +436,14 @@ function pintarRaton() {
 
 // ------------------------------------------------------------ cámara --
 
-const toggles = Object.fromEntries($$(".toggle").map(b => [b.dataset.v, b]));
+let objeto = "manos";        // qué detecta la cámara y qué se sigue
 
 $("#bCamara").addEventListener("click", async () => {
   if (camara.abierta) { camara.cerrar(); return; }
-  try { await abrirCamara($("#camSelect").value); } catch { /* el error sale en el panel */ }
+  try {
+    await abrirCamara($("#camSelect").value);
+    camara.elegir(objeto);
+  } catch { /* el error sale en el panel */ }
 });
 
 $("#camSelect").addEventListener("change", e => abrirCamara(e.target.value).catch(() => {}));
@@ -465,37 +468,36 @@ camara.addEventListener("cambio", () => {
   const antes = escena.cam.rig.visible;
   escena.mostrarCamara(abierta, abierta ? camara.lienzo : null);
   if (antes !== abierta) escena.encuadrar();
-  for (const [k, b] of Object.entries(toggles)) {
-    const on = k === "seguir" ? seg.activo : camara.usar[k];
-    b.classList.toggle("on", on);
-    b.classList.toggle("cargando", camara.cargando === k);
-    b.disabled = !abierta;
+  for (const b of $$("#segObjeto button")) {
+    b.classList.toggle("on", b.dataset.v === objeto);
+    b.classList.toggle("cargando", camara.cargando === b.dataset.v);
   }
+  $(".camara-fila").classList.toggle("apagada", !abierta);
   if (!abierta && seg.activo) ponerSeguimiento(false);
   pintarVision();
 });
 
-for (const [k, b] of Object.entries(toggles)) {
-  b.addEventListener("click", async () => {
-    if (k === "seguir") {
-      const si = !seg.activo;
-      if (si && !camara.usar.manos) await camara.activar("manos", true);
-      ponerSeguimiento(si);
-      return;
-    }
-    await camara.activar(k, !camara.usar[k]);
-    if (k === "manos" && !camara.usar.manos && seg.activo) ponerSeguimiento(false);
-  });
-}
+$("#segObjeto").addEventListener("click", async e => {
+  const b = e.target.closest("button");
+  if (!b || b.dataset.v === objeto) return;
+  objeto = b.dataset.v;
+  seg.filtro = seg.ultimo = seg.ancla = null;
+  escena.marcarMano(null);
+  escena.marcarObjetivo(null);
+  $$("#segObjeto button").forEach(x => x.classList.toggle("on", x === b));
+  if (camara.abierta) await camara.elegir(objeto);
+});
+
+$("#swSeguir").addEventListener("change", e => ponerSeguimiento(e.target.checked));
 
 function ponerSeguimiento(si, motivo = "") {
-  seg.activo = si && puedeMover() && camara.abierta;
+  seg.activo = si && !!puedeMover() && camara.abierta;
   seg.filtro = seg.ultimo = seg.ancla = null;
   seg.pausa = false;
   if (!seg.activo) escena.marcarObjetivo(null);
-  toggles.seguir.classList.toggle("on", seg.activo);
+  $("#swSeguir").checked = seg.activo;
   if (motivo) avisar(motivo);
-  if (si && !seg.activo) avisar(camara.abierta ? "Conecta el robot para seguir la mano" : "Abre la cámara primero");
+  if (si && !seg.activo) avisar(camara.abierta ? "Conecta el robot para seguir" : "Abre la cámara primero");
 }
 
 camara.addEventListener("deteccion", e => procesarVision(e.detail));

@@ -77,6 +77,13 @@ export class Camara extends EventTarget {
 
   avisar() { this.dispatchEvent(new Event("cambio")); }
 
+  // Un solo detector a la vez: manos o personas
+  async elegir(tipo) {
+    for (const k of Object.keys(this.usar)) if (k !== tipo) this.usar[k] = false;
+    this.resultado = { manos: [], personas: [] };
+    await this.activar(tipo, true);
+  }
+
   // Carga perezosa: la primera vez baja ~12 MB de wasm y los modelos
   async activar(tipo, si) {
     this.usar[tipo] = si;

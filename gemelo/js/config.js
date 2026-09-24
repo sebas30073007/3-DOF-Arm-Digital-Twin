@@ -12,9 +12,12 @@ export const FIRMWARE = {
   limMin: [-200, 0, -220],
   limMax: [20, 136.5, 0],
   pulsos: [1000, 200],          // { base, eslabones } pulsos/rev de los CL57T
-  vel: [10, 20],                // rpm del motor, por grupo
-  acel: [70, 70],               // rpm/s
-  velMin: 2, velMax: [30, 120],
+  // Valores de arranque de la página (el INO v7 arranca en {10, 20} rpm y
+  // {70, 70} rpm/s, y topa la base en 30 rpm: con el robot real, VEL B 50
+  // queda en 30 hasta que se suba VEL_MAX en el firmware)
+  vel: [50, 100],               // rpm del motor, por grupo { base, eslabones }
+  acel: [200, 350],             // rpm/s
+  velMin: 2, velMax: [50, 120],
   acelMin: 10, acelMax: [400, 400],
   rpmArranque: 5,
   homeRapido: 17, homeLento: 9, homeAcel: 200,
