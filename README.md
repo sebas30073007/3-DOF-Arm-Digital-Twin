@@ -157,10 +157,10 @@ python -m http.server 8765      # http://localhost:8765 (no abre con file://)
 ```
 
 - **Digital**: una ESP32 simulada en el navegador (`js/sim.js`) que habla el
-  mismo protocolo que v7 y se mueve igual: un eje a la vez (B, E1, E2), perfil
+  mismo protocolo que v8 y se mueve igual: los tres ejes a la vez, perfil
   trapezoidal con la reducción de cada eje, corrección del destino al vuelo, CAL,
-  HOME, Saludo y STOP con los mismos mensajes. En *Ajustes* se puede mover los tres
-  ejes a la vez (como sería el firmware pendiente) y acelerar el tiempo.
+  HOME, Saludo, las rutinas por pasos y STOP con los mismos mensajes. En *Ajustes*
+  se puede volver a un eje a la vez (como v7) y acelerar el tiempo.
 - **Real**: Web Serial (Chrome o Edge de escritorio, sobre https o localhost).
   Es la misma lógica que `manipulador/robot.py`: STATE? cada 150 ms y una línea por
   comando. Solo un programa puede abrir el COM: cierra Thonny y el panel de Python.
@@ -171,9 +171,12 @@ python -m http.server 8765      # http://localhost:8765 (no abre con file://)
   punto de agarre con flechas XYZ y cinemática inversa.
 - **Fantasma**: solo se dibuja desde la primera articulación que cambia (mover E2
   muestra solo el eslabón 2; E1, los eslabones 1 y 2; la base, todo el brazo).
-- **Rutinas**: el fantasma muestra las poses clave. En CAL y HOME, la pose final
-  desde el principio; en el Saludo, el final de cada movimiento, y avanza cuando
-  el real lo alcanza.
+- **Rutinas**: Calibrar, HOME y Saludo, más las rutinas por pasos de v8
+  (`RUTINA <nombre>`): Saludito, Reverencia, Saludo de lado, Bailecito y Picoteo.
+  Salen de HOME y regresan a HOME, y los ejes de cada paso se mueven a la vez; se
+  definen en `js/config.js` y en `manipulador_v8.ino` (las dos copias iguales).
+  El fantasma muestra las poses clave: en CAL y HOME, la pose final desde el
+  principio; en las demás, el final de cada paso, y avanza cuando el real lo alcanza.
 - **Cámara** (también en Digital): cualquier webcam del navegador. En el mundo 3D
   aparece con su pirámide de visión y el video en un cuadro a 35 cm; la pose por
   defecto es X 0, Y 0, Z 450 mm mirando hacia +Z (se edita en *Pose de la

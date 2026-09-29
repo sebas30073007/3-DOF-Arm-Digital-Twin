@@ -14,7 +14,7 @@
 // Lo que no simula: pasos perdidos, la página web del ESP32 (siempre manda la
 // PC) y el botón BOOT.
 
-import { FIRMWARE as F, HOME, grupo, rpmAGrados } from "./config.js";
+import { FIRMWARE as F, HOME, grupo, rpmAGrados, RUTINAS, RUTINA_PASOS } from "./config.js";
 
 const OK = 0, ALTO = 1;
 const PASO_SIM = 0.002;          // s por subpaso de integración
@@ -66,7 +66,7 @@ export class SimESP32 {
     if (cmd === "STATE?") return "STATE " + JSON.stringify(this.estado());
     if (cmd === "MODE?") return "MODE PC";
     if (cmd === "STOP") { this.accionAlto(); return "OK STOP"; }
-    if (cmd === "HELP" || cmd === "?") return "OK PING STATE? MODE? STOP CAL HOME SALUDO GOTO POSE VEL PULSOS";
+    if (cmd === "HELP" || cmd === "?") return "OK PING STATE? MODE? STOP CAL HOME SALUDO RUTINA GOTO POSE VEL PULSOS";
     if (cmd === "VEL") {
       const g = parseGrupo(a1), v = parseNum(a2), a = parseNum(a3);
       if (g < 0 || v === null) return "ERR ARGS";
@@ -82,10 +82,16 @@ export class SimESP32 {
       return "OK PULSOS";
     }
     if (cmd === "GRIP") return "ERR NO_IMPLEMENTADO";
-    if (!["CAL", "HOME", "SALUDO", "GOTO", "POSE"].includes(cmd)) return "ERR COMANDO";
+    if (!["CAL", "HOME", "SALUDO", "RUTINA", "GOTO", "POSE"].includes(cmd)) return "ERR COMANDO";
     if (cmd === "CAL") { this.accionAlto(); this.pedirCalib = true; return "OK CAL"; }
     if (cmd === "HOME") { this.pedirRutina = 1; return "OK HOME"; }
     if (cmd === "SALUDO") { this.pedirRutina = 2; return "OK SALUDO"; }
+    if (cmd === "RUTINA") {
+      const i = RUTINAS.findIndex(r => r.cmd === (a1 || "").toUpperCase());
+      if (i < 0) return "ERR ARGS";
+      this.pedirRutina = RUTINA_PASOS + i;
+      return "OK RUTINA";
+    }
     if (cmd === "GOTO") {
       const e = parseEje(a1), deg = parseNum(a2);
       if (e < 0 || deg === null) return "ERR ARGS";
@@ -171,7 +177,8 @@ export class SimESP32 {
     if (this.pedirRutina && !this.tareas.length) {
       const n = this.pedirRutina;
       this.pedirRutina = 0;
-      this.lanzar(n === 1 ? this.rutinaHome() : this.rutinaSaludo(), true);
+      const gen = n === 1 ? this.rutinaHome() : n === 2 ? this.rutinaSaludo() : this.rutinaPasos(RUTINAS[n - RUTINA_PASOS]);
+      this.lanzar(gen, true);
       return;
     }
     for (let e = 0; e < 3; e++) {
@@ -197,6 +204,8 @@ export class SimESP32 {
     if (t.espera.mover !== undefined) {
       t.espera.m = this.empezar(t.espera);
       if (!t.espera.m) t.valor = OK;       // ya estaba ahí
+    } else if (t.espera.pose !== undefined) {
+      t.espera.ms = t.espera.pose.map((deg, e) => (deg === null ? null : this.empezar({ mover: e, deg })));
     } else if (t.espera.pausa !== undefined) {
       t.espera.hasta = this.t + t.espera.pausa / 1000;
     }
@@ -209,6 +218,9 @@ export class SimESP32 {
       if (w.mover !== undefined) {
         if (w.m && !w.m.fin) continue;
         t.valor = w.m ? w.m.resultado : OK;
+      } else if (w.pose !== undefined) {
+        if (w.ms.some(m => m && !m.fin)) continue;
+        t.valor = w.ms.find(m => m && m.resultado !== OK)?.resultado ?? OK;
       } else if (w.pausa !== undefined) {
         if (this.pedirAlto) t.valor = ALTO;
         else if (this.t < w.hasta) continue;
@@ -296,6 +308,24 @@ export class SimESP32 {
     this.setMsg("Regresando a HOME...");
     const r = yield* this.irHome();
     this.setMsg(r === OK ? "En HOME" : "Detenido");
+  }
+
+  // rutinaPasos() del firmware: HOME, cada paso con sus ejes a la vez, HOME.
+  // Con `simultaneo` apagado (como v7) los ejes de un paso van uno tras otro.
+  *rutinaPasos(ru) {
+    if (!this.calibrado) { this.setMsg("Calibra primero"); this.rechazos++; return; }
+    this.setMsg(`${ru.nombre}: yendo a HOME...`);
+    let r = yield* this.irHome();
+    for (let k = 0; k < ru.pasos.length && r === OK; k++) {
+      this.setMsg(`${ru.nombre} ${k + 1}/${ru.pasos.length}`);
+      const [b, e1, e2, ms = 0] = ru.pasos[k];
+      const pose = [b, e1, e2];
+      if (this.simultaneo) r = yield { pose };
+      else for (let e = 0; e < 3 && r === OK; e++) if (pose[e] !== null) r = yield { mover: e, deg: pose[e] };
+      if (r === OK && ms) r = yield { pausa: ms };
+    }
+    if (r === OK) { this.setMsg(`${ru.nombre}: regresando a HOME...`); r = yield* this.irHome(); }
+    this.setMsg(r === OK ? `${ru.nombre} terminado` : "Detenido");
   }
 
   *rutinaSaludo() {

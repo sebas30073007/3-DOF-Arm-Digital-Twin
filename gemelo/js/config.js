@@ -33,6 +33,23 @@ export const HOME = [0, DESPEJE, -DESPEJE];
 
 export const grupo = e => (e === 0 ? 0 : 1);
 
+// Rutinas por pasos de v8 (RUTINA <cmd>). Salen de HOME y regresan a HOME.
+// Cada paso es [base, E1, E2, espera ms]: null = ese eje no se mueve, y los
+// ejes de un mismo paso se mueven a la vez. Copia de RUTINAS en manipulador_v8.ino.
+export const RUTINAS = [
+  { cmd: "SALUDITO", nombre: "Saludito",
+    pasos: [[null, 44, null], [null, null, -90], [null, null, -70], [null, null, -90]] },
+  { cmd: "REVERENCIA", nombre: "Reverencia",
+    pasos: [[null, 50, -40], [null, null, -72], [null, 100, null, 2000], [null, 54, null], [null, null, -62], [null, null, -72]] },
+  { cmd: "LADO", nombre: "Saludo de lado", boton: "De lado",
+    pasos: [[null, 50, -55], [15, null, null], [-15, null, null], [15, null, null], [-15, null, null]] },
+  { cmd: "BAILE", nombre: "Bailecito",
+    pasos: [[null, 35, -35], [null, 65, -70], [null, 35, -45], [null, 65, -70], [null, 35, -35]] },
+  { cmd: "PICOTEO", nombre: "Picoteo",
+    pasos: [[null, 70, -55], [null, 85, -35], [null, 65, -60], [null, 85, -35], [null, 70, -55]] },
+];
+export const RUTINA_PASOS = 10;     // pedirRutina = RUTINA_PASOS + índice, como el firmware
+
 // Grados de articulación por segundo a partir de rpm del motor
 export const rpmAGrados = (rpm, e) => (rpm * 6) / FIRMWARE.reduccion[e];
 

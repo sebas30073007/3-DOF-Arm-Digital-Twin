@@ -10,7 +10,7 @@
 // final desde el principio; en el Saludo, el final de cada movimiento, y pasa
 // al siguiente solo cuando el real llegó. Después de ALTO se pega al real.
 
-import { EJES, NOMBRES, FIRMWARE, HOME, grupo, rpmAGrados, limitar, cargarCalibracion, guardarCalibracion, GEMELO_DEFECTO, cargarCamara, guardarCamara } from "./config.js";
+import { EJES, NOMBRES, FIRMWARE, HOME, RUTINAS, grupo, rpmAGrados, limitar, cargarCalibracion, guardarCalibracion, GEMELO_DEFECTO, cargarCamara, guardarCamara } from "./config.js";
 import { Cinematica } from "./cinematica.js";
 import { Escena } from "./escena.js";
 import { EnlaceSim, EnlaceSerial, nombrePuerto, esEspressif } from "./enlace.js";
@@ -816,21 +816,40 @@ window.addEventListener("keydown", e => {
   if (e.key === "Escape") { e.preventDefault(); alto(); }
 });
 
-// Poses clave de cada rutina, a partir de la pose actual. El firmware mueve
-// un eje por paso (HOME: E2, E1, base), así que cada paso es un cuadro.
+// Poses clave de cada rutina, a partir de la pose actual. HOME va un eje a la
+// vez (E2, E1, base); en las rutinas por pasos, los ejes de un paso van
+// juntos, así que el paso completo es un cuadro.
 function framesRutina(cmd, q) {
   const H = HOME;
   if (cmd === "CAL") return [[q[0], H[1], H[2]]];      // CAL no mueve la base
   if (cmd === "HOME") return [[0, H[1], H[2]]];
   const S = FIRMWARE.saludo, f = [];
   let p = q.slice();
-  const paso = (e, v) => { if (Math.abs(p[e] - v) > 0.05) { p = p.slice(); p[e] = v; f.push(p); } };
+  const pose = (b, e1, e2) => {
+    const n = [b, e1, e2].map((v, e) => (v === null ? p[e] : v));
+    if (n.some((v, e) => Math.abs(v - p[e]) > 0.05)) { p = n; f.push(p); }
+  };
+  const paso = (e, v) => pose(...[0, 1, 2].map(k => (k === e ? v : null)));
   const irHome = () => { paso(2, H[2]); paso(1, H[1]); paso(0, 0); };
   irHome();
-  paso(1, S.e1);
-  for (let c = 0; c < S.ciclos; c++) { paso(2, S.e2a); paso(2, S.e2b); }
+  const ru = RUTINAS.find(r => cmd === "RUTINA " + r.cmd);
+  if (ru) for (const [b, e1, e2] of ru.pasos) pose(b, e1, e2);
+  else {
+    paso(1, S.e1);
+    for (let c = 0; c < S.ciclos; c++) { paso(2, S.e2a); paso(2, S.e2b); }
+  }
   irHome();
   return f.length ? f : [q.slice()];
+}
+
+// Botones de las rutinas por pasos, después de Calibrar / HOME / Saludo
+for (const ru of RUTINAS) {
+  const b = document.createElement("button");
+  b.className = "btn btn-sec";
+  b.dataset.rutina = "RUTINA " + ru.cmd;
+  b.textContent = ru.boton || ru.nombre;
+  b.title = ru.nombre;
+  $("#rutinasBotones").appendChild(b);
 }
 
 for (const b of $$("[data-rutina]")) {
@@ -844,7 +863,10 @@ for (const b of $$("[data-rutina]")) {
     if (r && r.startsWith("ERR")) {
       rutina = null;
       pegarRef(0);
-      avisar(r === "ERR MODO_WEB" ? "El control lo tiene la página del ESP32" : r);
+      avisar({
+        "ERR MODO_WEB": "El control lo tiene la página del ESP32",
+        "ERR COMANDO": "Este firmware no tiene esa rutina: carga manipulador_v8",
+      }[r] || r);
     }
   });
 }

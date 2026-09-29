@@ -20,7 +20,9 @@
   sus pasos se suman con signo y un emisor aparte los saca con la dirección
   neta, así el eslabón 2 no se desalinea aunque E1 y E2 se muevan juntos.
   Calibración, HOME, saludo y jog siguen siendo un eje a la vez (en HOME el
-  orden E2, E1, base evita choques).
+  orden E2, E1, base evita choques). Las rutinas por pasos (RUTINA) mueven a
+  la vez los ejes de cada paso.
+
   Grupo 0 = base (driver 3). Grupo 1 = eslabones (drivers 1 y 2: deben tener
   los mismos pulsos/rev porque el eslabón 1 arrastra al motor del eslabón 2 1:1).
 
@@ -37,6 +39,7 @@
     STOP                      -> frena con rampa y vacía la cola
     CAL                       -> calibración
     HOME | SALUDO             -> rutinas
+    RUTINA <nombre>           -> rutina por pasos: SALUDITO, REVERENCIA, LADO, BAILE, PICOTEO
     GOTO <B|E1|E2> <grados>   -> objetivo absoluto; si llega otro mientras se mueve,
                                  se corrige el destino al vuelo (seguimiento)
     POSE <b|NA> <e1|NA> <e2|NA>
@@ -50,6 +53,10 @@ enum { RES_NADA, RES_OK, RES_SWITCH, RES_SEGURIDAD, RES_ALTO, RES_BLOQ };
 enum { M_NADA, M_ACTIVAR, M_LIBERAR, M_SEGURIDAD };
 enum { BASE = 0, CODO = 1, MUNECA = 2 };
 enum { FUENTE_WEB = 0, FUENTE_PC = 1 };
+// Paso de una rutina: pose a la que van a la vez los ejes que no son NAN, y
+// espera al llegar
+struct PasoRutina { float b, e1, e2; uint16_t ms; };
+struct Rutina { const char* comando; const char* titulo; const PasoRutina* pasos; uint8_t n; };
 
 // -------------------- Red --------------------
 const char* NOMBRE_RED = "Manipulador";
@@ -117,6 +124,35 @@ const float SALUDO_E2_A = -45.0f;   // el eslabón 2 trabaja en negativo (0 a -2
 const float SALUDO_E2_B = -30.0f;
 const int   SALUDO_CICLOS = 2;
 const uint32_t SALUDO_PAUSA_MS = 20;
+
+// Rutinas por pasos (RUTINA <comando>): salen de HOME y regresan a HOME.
+// NAN = ese eje no se mueve en el paso. Copia de RUTINAS en gemelo/js/config.js.
+const PasoRutina R_SALUDITO[] = {
+  { NAN, 44, NAN, 0 }, { NAN, NAN, -90, 0 }, { NAN, NAN, -70, 0 }, { NAN, NAN, -90, 0 },
+};
+const PasoRutina R_REVERENCIA[] = {
+  { NAN, 50, -40, 0 }, { NAN, NAN, -72, 0 }, { NAN, 100, NAN, 2000 },   // se queda 2 s abajo
+  { NAN, 54, NAN, 0 }, { NAN, NAN, -62, 0 }, { NAN, NAN, -72, 0 },
+};
+const PasoRutina R_LADO[] = {
+  { NAN, 50, -55, 0 }, { 15, NAN, NAN, 0 }, { -15, NAN, NAN, 0 }, { 15, NAN, NAN, 0 }, { -15, NAN, NAN, 0 },
+};
+const PasoRutina R_BAILE[] = {
+  { NAN, 35, -35, 0 }, { NAN, 65, -70, 0 }, { NAN, 35, -45, 0 }, { NAN, 65, -70, 0 }, { NAN, 35, -35, 0 },
+};
+const PasoRutina R_PICOTEO[] = {
+  { NAN, 70, -55, 0 }, { NAN, 85, -35, 0 }, { NAN, 65, -60, 0 }, { NAN, 85, -35, 0 }, { NAN, 70, -55, 0 },
+};
+#define PASOS(r) r, (uint8_t)(sizeof(r) / sizeof(r[0]))
+const Rutina RUTINAS[] = {
+  { "SALUDITO",   "Saludito",       PASOS(R_SALUDITO) },
+  { "REVERENCIA", "Reverencia",     PASOS(R_REVERENCIA) },
+  { "LADO",       "Saludo de lado", PASOS(R_LADO) },
+  { "BAILE",      "Bailecito",      PASOS(R_BAILE) },
+  { "PICOTEO",    "Picoteo",        PASOS(R_PICOTEO) },
+};
+const int N_RUTINAS = sizeof(RUTINAS) / sizeof(RUTINAS[0]);
+const int RUTINA_PASOS = 10;        // pedirRutina = RUTINA_PASOS + índice en RUTINAS
 
 // -------------------- Timer --------------------
 const uint32_t TICK_HZ = 40000;           // 25 us
@@ -815,6 +851,74 @@ uint8_t pausa(uint32_t ms) {
   return pedirAlto ? RES_ALTO : RES_OK;
 }
 
+bool algunoActivo() { return e_activo[0] || e_activo[1] || e_activo[2]; }
+
+// Lleva a la vez los ejes que no son NAN a su ángulo y espera a que lleguen
+// todos. Devuelve RES_OK o el primer resultado distinto (ejeFalla = dónde).
+uint8_t moverPose(const float q[3], int& ejeFalla) {
+  long delta[3] = { 0, 0, 0 };
+  for (int e = 0; e < 3; e++) {
+    if (isnan(q[e])) continue;
+    float deg = q[e];
+    if (deg < LIM_MIN[e]) deg = LIM_MIN[e];
+    if (deg > LIM_MAX[e]) deg = LIM_MAX[e];
+    delta[e] = lroundf(deg * ppg(e)) - pos[e];
+    if (delta[e] && signoBloqueado(e) == (delta[e] > 0 ? 1 : -1)) { ejeFalla = e; return RES_BLOQ; }
+  }
+  uint32_t mSw = vigilarSwitches();
+  for (int e = 0; e < 3; e++) {
+    if (!delta[e]) continue;
+    int g = grupo(e);
+    arrancar(e, delta[e] > 0 ? 1 : -1, labs(delta[e]), velRpm[g], acelRpmS[g], M_SEGURIDAD, mSw);
+  }
+  while (algunoActivo()) {
+    atender();
+    if (pedirAlto) frenarTodos();
+    delay(1);
+  }
+  uint32_t t0 = millis();
+  while (m1Pend != 0 && millis() - t0 < 50) delay(1);   // el motor del eslabón 2 termina sus pasos
+  uint8_t peor = RES_OK;
+  for (int e = 0; e < 3; e++) {
+    if (!e_abierto[e]) continue;
+    uint8_t r = cerrarEje(e);
+    if (r != RES_OK && peor == RES_OK) { peor = r; ejeFalla = e; }
+  }
+  return peor;
+}
+
+int buscarRutina(const char* comando) {
+  if (!comando) return -1;
+  for (int i = 0; i < N_RUTINAS; i++) if (!strcasecmp(comando, RUTINAS[i].comando)) return i;
+  return -1;
+}
+
+// HOME -> pasos de la rutina (los ejes de cada paso a la vez) -> HOME
+void rutinaPasos(int i) {
+  const Rutina& ru = RUTINAS[i];
+  int eje = CODO;
+  char t[96];
+  snprintf(t, sizeof(t), "%s: yendo a HOME...", ru.titulo);
+  setMsg(t);
+  uint8_t r = irHome(eje);
+  for (uint8_t k = 0; k < ru.n && r == RES_OK; k++) {
+    snprintf(t, sizeof(t), "%s %d/%d", ru.titulo, k + 1, ru.n);
+    setMsg(t);
+    const PasoRutina& p = ru.pasos[k];
+    const float q[3] = { p.b, p.e1, p.e2 };
+    r = moverPose(q, eje);
+    if (r == RES_OK && p.ms) r = pausa(p.ms);
+  }
+  if (r == RES_OK) {
+    snprintf(t, sizeof(t), "%s: regresando a HOME...", ru.titulo);
+    setMsg(t);
+    r = irHome(eje);
+  }
+  ocupado = false;
+  snprintf(t, sizeof(t), "%s terminado", ru.titulo);
+  mensajeResultado(eje, r, t);
+}
+
 void rutina(int n) {
   limpiarCola();
   if (!calibrado) { setMsg("Calibra primero"); rechazos++; return; }
@@ -822,6 +926,8 @@ void rutina(int n) {
   int eje = CODO;
   uint8_t r;
   char t[96];
+
+  if (n >= RUTINA_PASOS && n < RUTINA_PASOS + N_RUTINAS) { rutinaPasos(n - RUTINA_PASOS); return; }
 
   if (n == 1) {
     setMsg("Regresando a HOME...");
@@ -1114,7 +1220,7 @@ void procesarLinea(char* l) {
   if (!strcmp(cmd, "MODE?")) { Serial.println(fuente == FUENTE_PC ? "MODE PC" : "MODE WEB"); return; }
   if (!strcmp(cmd, "STOP")) { accionAlto(); Serial.println("OK STOP"); return; }
   if (!strcmp(cmd, "HELP") || !strcmp(cmd, "?")) {
-    Serial.println("OK PING STATE? MODE? STOP CAL HOME SALUDO GOTO POSE VEL PULSOS");
+    Serial.println("OK PING STATE? MODE? STOP CAL HOME SALUDO RUTINA GOTO POSE VEL PULSOS");
     return;
   }
   if (!strcmp(cmd, "VEL")) {
@@ -1135,7 +1241,7 @@ void procesarLinea(char* l) {
   if (!strcmp(cmd, "GRIP")) { Serial.println("ERR NO_IMPLEMENTADO"); return; }
 
   // ---- movimiento: solo con control PC ----
-  bool mov = !strcmp(cmd, "CAL") || !strcmp(cmd, "HOME") || !strcmp(cmd, "SALUDO") ||
+  bool mov = !strcmp(cmd, "CAL") || !strcmp(cmd, "HOME") || !strcmp(cmd, "SALUDO") || !strcmp(cmd, "RUTINA") ||
              !strcmp(cmd, "GOTO") || !strcmp(cmd, "POSE");
   if (!mov) { Serial.println("ERR COMANDO"); return; }
   if (fuente != FUENTE_PC) { Serial.println("ERR MODO_WEB"); return; }
@@ -1143,6 +1249,13 @@ void procesarLinea(char* l) {
   if (!strcmp(cmd, "CAL"))    { accionCalibrar(); Serial.println("OK CAL"); return; }
   if (!strcmp(cmd, "HOME"))   { pedirRutina = 1; Serial.println("OK HOME"); return; }
   if (!strcmp(cmd, "SALUDO")) { pedirRutina = 2; Serial.println("OK SALUDO"); return; }
+  if (!strcmp(cmd, "RUTINA")) {
+    int i = buscarRutina(a1);
+    if (i < 0) { Serial.println("ERR ARGS"); return; }
+    pedirRutina = RUTINA_PASOS + i;
+    Serial.println("OK RUTINA");
+    return;
+  }
 
   if (!strcmp(cmd, "GOTO")) {
     int e = parseEje(a1);
