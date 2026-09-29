@@ -247,6 +247,28 @@ export class Escena {
     }
   }
 
+  // Deja el render como recién cargado en la pose q: sólido completo y
+  // visible, fantasma pegado al real, sin arrastre ni resalte, y los arcos
+  // y el punto rehechos. Se usa al terminar la calibración, cuando el
+  // firmware salta de sus contadores de arranque a la pose de HOME.
+  reiniciar(q) {
+    if (!this.listo) return;
+    if (this.arrastre) this.arrastre = null;
+    this.controles.enabled = true;
+    this.renderer.domElement.style.cursor = "";
+    this.ponerHover(-1);
+    this.solido.raiz.traverse(o => { o.visible = true; });
+    this.fantasma.raiz.traverse(o => { o.visible = true; });
+    this.fantasma.raiz.visible = false;
+    this.fantasmaDesde = undefined;
+    this.real = q.slice();
+    this.ref = q.slice();
+    this.poner(this.solido, q);
+    this.poner(this.fantasma, q);
+    this.reconstruirArcos();
+    if (this.modo === "punto") { this.punto.esfera.position.fromArray(this.cin.directa(q)); this.punto.fuera = false; }
+  }
+
   // ----------------------------------------------------------- arcos --
 
   // Tras cambiar el sentido u offset del gemelo, los rangos cambian de lugar

@@ -68,6 +68,12 @@ function grupoDe(n) {
   return 'base';
 }
 
+// En el CAD el motor de la base está a la izquierda del robot (+X, mirando
+// a +Z); en el robot real se movió a la derecha. Estas piezas se giran 180°
+// alrededor del eje de la base: la banda sigue abrazando la polea de 50T,
+// que está centrada en el eje.
+const GIRAR_180 = /^(nema17:3|reductor_nema17:3|htd3m_20T_offset_28_9mm:1|Cinta_base:1|base_giratoria:1)$/;
+
 // El TCP: entre los dos dedos, a 3/4 del largo hacia la punta.
 const d1 = getBounds(buscar('AA_gripper:1')), d2 = getBounds(buscar('AA_gripper:2'));
 const tcpMundo = [
@@ -102,6 +108,8 @@ for (const pieza of piezas) {
     if (!malla) return;
     const m = n.getWorldMatrix().slice();
     m[12] -= pivote[g][0]; m[13] -= pivote[g][1]; m[14] -= pivote[g][2];
+    // Giro de 180° en Y sobre el pivote de la base: niega las filas X y Z
+    if (GIRAR_180.test(nombre(pieza))) for (const i of [0, 4, 8, 12, 2, 6, 10, 14]) m[i] = -m[i];
     grupos[g].addChild(doc.createNode(nombre(pieza)).setMesh(malla).setMatrix(m));
   });
 }

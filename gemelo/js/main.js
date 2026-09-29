@@ -21,6 +21,7 @@ const $$ = s => [...document.querySelectorAll(s)];
 const MS_ENVIO = 120;
 const INVERTIDO = [false, false, true];   // como la página del ESP32: E2 va de 0 (izq.) a −220 (der.)
 const LLEGO = 0.25;                       // grados para dar una pose clave por alcanzada
+const VEL_ESLABONES = [100, 350];         // rpm y rpm/s de E1 y E2 después de calibrar
 
 const cal = cargarCalibracion();
 const poseCam = cargarCamara();
@@ -35,6 +36,7 @@ let real = null;            // último estado del robot
 let realVisto = null;       // lo que se dibuja (suavizado en modo real)
 let refSigue = { hasta: 0, activo: true };
 let rutina = null;          // { frames, i, t0, vioOcupado }
+let calPrevio = null;       // cal del STATE anterior, para ver cuándo termina de calibrar
 let enviado = [null, null, null];
 let timerEnvio = null, tEnvio = 0;
 let jog = null;
@@ -76,6 +78,7 @@ function usarEnlace(nuevo) {
   real = null;
   realVisto = null;
   rutina = null;
+  calPrevio = null;
   pegarRef();
   alConexion();
   if (enlace.estado) alEstado();
@@ -83,7 +86,7 @@ function usarEnlace(nuevo) {
 
 function alEstado() {
   const s = enlace.estado;
-  if (!s) return;
+  if (!s || ![s.b, s.c, s.m].every(Number.isFinite)) return;
   real = [s.b, s.c, s.m];
   // Sin calibrar, E1 y E2 son pasos contados desde que encendió, no la pose
   // física: al buscar los switches pasan de 0 y el gemelo se doblaba contra
@@ -91,6 +94,8 @@ function alEstado() {
   if (!s.cal) real = real.map((v, e) => (e ? limitar(e, v) : v));
   if (!realVisto || enlace.tipo === "sim") realVisto = real.slice();
   const ahora = performance.now();
+  if (calPrevio === 0 && s.cal) { calPrevio = 1; trasCalibrar(); pintarEstado(s); return; }
+  calPrevio = s.cal ? 1 : 0;
 
   if (rutina) {
     if (s.ocu) rutina.vioOcupado = true;
@@ -109,6 +114,23 @@ function alEstado() {
   }
   if (!ref) { ref = real.slice(); escena.setRef(ref); }
   pintarEstado(s);
+}
+
+// Al terminar la calibración el firmware salta de sus contadores de arranque
+// a HOME: el render se rehace en esa pose. La calibración va lenta (el
+// firmware usa sus velocidades de homing); ya calibrado, la base sube a su
+// máximo y los eslabones a VEL_ESLABONES.
+async function trasCalibrar() {
+  rutina = null;
+  realVisto = real.slice();
+  pegarRef(0);
+  escena.reiniciar(real);
+  const vr = enlace.estado?.vr;       // [velMin, velMax B, velMax E, acelMin, acelMax B, acelMax E]
+  const velB = vr?.[1] ?? FIRMWARE.velMax[0], acelB = vr?.[4] ?? FIRMWARE.acelMax[0];
+  const velE = Math.min(VEL_ESLABONES[0], vr?.[2] ?? FIRMWARE.velMax[1]);
+  const acelE = Math.min(VEL_ESLABONES[1], vr?.[5] ?? FIRMWARE.acelMax[1]);
+  await enlace.cmd(`VEL B ${velB} ${acelB}`);
+  await enlace.cmd(`VEL E ${velE} ${acelE}`);
 }
 
 const cerca = (a, b) => a.every((v, e) => Math.abs(v - b[e]) < LLEGO);
