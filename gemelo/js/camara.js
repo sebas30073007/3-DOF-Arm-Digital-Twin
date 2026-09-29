@@ -32,7 +32,10 @@ export class Camara extends EventTarget {
     this.resultado = { manos: [], personas: [] };
     this.tDetect = 0;
     this.ultimoFrame = -1;
-    this.error = "";
+    this.error = "";          // de la cámara: no abrió o se perdió
+    this.errorModelo = "";    // del detector: la cámara sigue abierta
+    this.abriendo = false;
+    this.nombre = "";
   }
 
   get abierta() { return !!this.stream; }
@@ -46,27 +49,52 @@ export class Camara extends EventTarget {
 
   async abrir(deviceId = this.deviceId) {
     this.cerrar();
+    this.abriendo = true;
+    this.avisar();
     try {
+      if (!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error(), { name: "SinApi" });
       this.stream = await navigator.mediaDevices.getUserMedia({
         video: { deviceId: deviceId ? { exact: deviceId } : undefined, width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false,
       });
+      const pista = this.stream.getVideoTracks()[0];
+      this.deviceId = pista?.getSettings().deviceId || deviceId;
+      this.nombre = (pista?.label || "").replace(/\s*\([0-9a-f]{4}:[0-9a-f]{4}\)$/i, "");
+      // Cámara USB desconectada u ocupada por otra app a media sesión
+      pista?.addEventListener("ended", () => this.cerrar("Se perdió la cámara"));
+      this.video.srcObject = this.stream;
+      await this.video.play().catch(() => {});
+      // Si en 8 s no llega ningún cuadro, la cámara no está mandando imagen
+      await new Promise((r, no) => {
+        if (this.video.readyState >= 2) return r();
+        this.video.addEventListener("loadeddata", r, { once: true });
+        setTimeout(() => no(Object.assign(new Error(), { name: "SinImagen" })), 8000);
+      });
     } catch (e) {
-      this.error = e.name === "NotAllowedError" ? "Sin permiso para usar la cámara" : e.name === "NotFoundError" ? "No hay cámara" : String(e.message || e);
+      this.stream?.getTracks().forEach(t => t.stop());
+      this.stream = null;
+      this.abriendo = false;
+      this.error = {
+        NotAllowedError: "Sin permiso para la cámara · actívalo en el candado de la barra de direcciones",
+        NotFoundError: "No se encontró ninguna cámara",
+        NotReadableError: "La cámara está ocupada por otra app",
+        OverconstrainedError: "Esa cámara ya no está conectada",
+        SinImagen: "La cámara no manda imagen",
+        NotSupportedError: "Este navegador no da acceso a la cámara",
+        SinApi: "Este navegador no da acceso a la cámara (se necesita https o localhost)",
+      }[e.name] || "No se pudo abrir la cámara · " + (e.message || e);
       this.avisar();
       throw e;
     }
-    this.deviceId = this.stream.getVideoTracks()[0]?.getSettings().deviceId || deviceId;
-    this.video.srcObject = this.stream;
-    await this.video.play().catch(() => {});
-    await new Promise(r => (this.video.readyState >= 2 ? r() : this.video.addEventListener("loadeddata", r, { once: true })));
     this.lienzo.width = 640;
     this.lienzo.height = Math.round(640 * this.alto / this.ancho);
+    this.abriendo = false;
     this.error = "";
     this.avisar();
   }
 
-  cerrar() {
+  cerrar(motivo = "") {
+    this.error = motivo;
     if (!this.stream) return;
     this.stream.getTracks().forEach(t => t.stop());
     this.stream = null;
@@ -89,6 +117,7 @@ export class Camara extends EventTarget {
     this.usar[tipo] = si;
     if (!si || this.modelos[tipo]) { this.avisar(); return; }
     this.cargando = tipo;
+    this.errorModelo = "";
     this.avisar();
     try {
       const vision = await import(`${MP}/vision_bundle.mjs`);
@@ -105,7 +134,7 @@ export class Camara extends EventTarget {
       try { this.modelos[tipo] = await crear("GPU"); } catch { this.modelos[tipo] = await crear("CPU"); }
     } catch (e) {
       this.usar[tipo] = false;
-      this.error = "No se pudo cargar el modelo: " + (e.message || e);
+      this.errorModelo = "No se pudo cargar el detector: " + (e.message || e);
     }
     this.cargando = "";
     this.avisar();

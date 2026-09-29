@@ -13,7 +13,7 @@
 import { EJES, NOMBRES, FIRMWARE, HOME, grupo, rpmAGrados, limitar, cargarCalibracion, guardarCalibracion, GEMELO_DEFECTO, cargarCamara, guardarCamara } from "./config.js";
 import { Cinematica } from "./cinematica.js";
 import { Escena } from "./escena.js";
-import { EnlaceSim, EnlaceSerial } from "./enlace.js";
+import { EnlaceSim, EnlaceSerial, nombrePuerto, esEspressif } from "./enlace.js";
 import { Camara } from "./camara.js";
 
 const $ = s => document.querySelector(s);
@@ -122,15 +122,10 @@ function pegarRef(ms = 300) {
 function alConexion() {
   const esSim = enlace.tipo === "sim";
   const con = enlace.conectado;
-  $("#conexion").hidden = esSim || con;
+  $("#puerto").hidden = esSim;
   $("#visorVacio").hidden = esSim || con;
   $("#ajustesSim").hidden = !esSim;
-  if (!esSim) {
-    $("#conexionTexto").textContent = !EnlaceSerial.disponible()
-      ? "Este navegador no tiene Web Serial: usa Chrome o Edge"
-      : serial?.error || "ESP32 desconectada";
-    $("#bConectar").hidden = !EnlaceSerial.disponible();
-  }
+  pintarPuertos();
   if (con && !esSim) pegarRef(500);
   if (!con) {
     $("#ocupado").classList.remove("activo");
@@ -139,6 +134,99 @@ function alConexion() {
     $("#avisoCal").hidden = $("#avisoWeb").hidden = true;
   }
   actualizarBloqueo();
+}
+
+// ------------------------------------------------------------ puertos --
+
+// En Real siempre se ve el menú de puertos: los que el navegador ya tiene
+// autorizados, el conectado marcado, y «Buscar puerto…» para abrir la lista
+// del navegador (la única que muestra el COM).
+let puertos = [];
+let conectando = false;
+let tAuto = 0;
+
+function nuevoSerial() {
+  serial = new EnlaceSerial();
+  serial.addEventListener("conexion", pintarPuertos);
+  return serial;
+}
+
+async function conectarCon(fn) {
+  conectando = true;
+  pintarPuertos();
+  try { await fn(); } catch (e) {
+    if (e.name !== "NotFoundError") avisar(serial?.error || e.message);   // NotFound: cerró la lista sin elegir
+  }
+  conectando = false;
+  pintarPuertos();
+}
+
+async function pintarPuertos() {
+  const con = !!serial?.conectado;
+  const bReal = $('#segModo [data-modo="real"]');
+  bReal.classList.toggle("con", con);
+  bReal.title = con ? `Conectado · ${nombrePuerto(serial.puerto)}` : "ESP32 por USB (Web Serial, Chrome o Edge)";
+  if (enlace?.tipo !== "serial") return;
+
+  const sel = $("#selPuerto"), boton = $("#bConectar");
+  if (!EnlaceSerial.disponible()) {
+    sel.hidden = boton.hidden = true;
+    estadoPuerto("error", "Este navegador no tiene Web Serial: usa Chrome o Edge");
+    return;
+  }
+  puertos = await navigator.serial.getPorts();
+  const elegido = con ? serial.puerto : puertos.find(p => p === serial?.ultimo) || puertos.find(esEspressif) || puertos[0];
+  const nombres = puertos.map(nombrePuerto);
+  const opciones = puertos.map((p, i) => {
+    const iguales = nombres.filter(n => n === nombres[i]).length;
+    const num = iguales > 1 ? ` #${nombres.slice(0, i + 1).filter(n => n === nombres[i]).length}` : "";
+    return `<option value="${i}"${p === elegido ? " selected" : ""}>${con && p === serial.puerto ? "● " : ""}${nombres[i]}${num}</option>`;
+  });
+  if (!puertos.length) opciones.push(`<option value="" disabled selected>Ningún puerto autorizado</option>`);
+  opciones.push(`<option value="buscar">Buscar puerto…</option>`);
+  if (document.activeElement !== sel) sel.innerHTML = opciones.join("");
+  sel.hidden = boton.hidden = false;
+  sel.disabled = boton.disabled = conectando;
+  boton.textContent = con ? "Desconectar" : puertos.length ? "Conectar" : "Buscar";
+
+  if (conectando) estadoPuerto("conectando", "Conectando…");
+  else if (con) estadoPuerto("ok", "Conectado · 115200 baudios");
+  else if (serial?.error) estadoPuerto("error", serial.error);
+  else estadoPuerto("", puertos.length ? "Sin conexión · elige el puerto de la ESP32-C3" : "Sin conexión · busca el puerto de la ESP32-C3");
+}
+
+function estadoPuerto(clase, texto) {
+  $("#puertoEstado").className = "puerto-estado " + clase;
+  $("#conexionTexto").textContent = texto;
+}
+
+$("#selPuerto").addEventListener("change", e => {
+  const v = e.target.value;
+  e.target.blur();
+  if (!serial) return;
+  if (v === "buscar") conectarCon(() => serial.buscar());
+  else if (puertos[Number(v)]) conectarCon(() => serial.cambiarA(puertos[Number(v)]));
+});
+
+$("#bConectar").addEventListener("click", () => {
+  if (!serial) return;
+  if (serial.conectado) { serial.cerrar(); return; }
+  const p = puertos[Number($("#selPuerto").value)];
+  conectarCon(() => (p ? serial.abrir(p) : serial.buscar()));
+});
+
+if (EnlaceSerial.disponible()) {
+  // Al enchufar la ESP32 estando en Real se conecta sola (a lo más una vez
+  // cada 3 s: la C3 se vuelve a enumerar si se reinicia)
+  navigator.serial.addEventListener("connect", ev => {
+    const p = ev.target;
+    if (enlace?.tipo === "serial" && serial && !serial.conectado && !conectando &&
+        (p === serial.ultimo || esEspressif(p)) && performance.now() - tAuto > 3000) {
+      tAuto = performance.now();
+      conectarCon(() => serial.abrir(p));
+    } else pintarPuertos();
+  });
+  navigator.serial.addEventListener("disconnect", () => pintarPuertos());
 }
 
 // -------------------------------------------------------- referencia --
@@ -438,13 +526,15 @@ function pintarRaton() {
 
 let objeto = "manos";        // qué detecta la cámara y qué se sigue
 
-$("#bCamara").addEventListener("click", async () => {
-  if (camara.abierta) { camara.cerrar(); return; }
+async function encenderCamara() {
   try {
     await abrirCamara($("#camSelect").value);
     camara.elegir(objeto);
-  } catch { /* el error sale en el panel */ }
-});
+  } catch { /* el error sale en el cuadro */ }
+}
+$("#bCamara").addEventListener("click", encenderCamara);
+$("#bCamReintentar").addEventListener("click", encenderCamara);
+$("#bCamCerrar").addEventListener("click", () => camara.cerrar());
 
 $("#camSelect").addEventListener("change", e => abrirCamara(e.target.value).catch(() => {}));
 
@@ -458,11 +548,17 @@ async function abrirCamara(id) {
   sel.hidden = lista.length < 2;
 }
 
+// El cuadro dice en qué va la cámara: apagada, abriendo (esperando el
+// permiso), en vivo o con error.
 camara.addEventListener("cambio", () => {
   const abierta = camara.abierta;
-  $("#bCamara").textContent = abierta ? "Cerrar" : "Abrir";
+  $("#camCuadro").dataset.e = camara.abriendo ? "abriendo" : abierta ? "on" : camara.error ? "error" : "off";
+  $("#camError").textContent = camara.error;
+  $("#camNombre").textContent = camara.nombre;
+  const cm = $("#camModelo");
+  cm.hidden = !(abierta && camara.cargando);
+  cm.lastElementChild.textContent = `Cargando detector de ${camara.cargando}…`;
   const mini = $("#miniatura");
-  mini.hidden = !abierta;
   if (abierta && !mini.contains(camara.lienzo)) mini.appendChild(camara.lienzo);
   escena.ponerCamara(poseCam, camara.ancho / camara.alto);
   const antes = escena.cam.rig.visible;
@@ -563,9 +659,9 @@ function procesarVision(r) {
 
 function pintarVision(mano, dist, nPersonas = 0) {
   const el = $("#estadoVision");
-  if (camara.error) { el.textContent = camara.error; return; }
-  if (camara.cargando) { el.textContent = `cargando ${camara.cargando}…`; return; }
   if (!camara.abierta) { el.textContent = ""; return; }
+  if (camara.errorModelo) { el.textContent = camara.errorModelo; return; }
+  if (camara.cargando) { el.textContent = ""; return; }
   const partes = [];
   if (mano) partes.push(`mano · ${mano.dedos} dedos · ${dist.toFixed(2)} m${seg.activo ? (mano.dedos >= 4 ? " · siguiendo" : " · pausa") : ""}`);
   if (nPersonas) partes.push(`${nPersonas} persona${nPersonas > 1 ? "s" : ""}`);
@@ -656,27 +752,23 @@ for (const b of $$("[data-rutina]")) {
   });
 }
 
-$("#segModo").addEventListener("click", async e => {
+$("#segModo").addEventListener("click", e => {
   const b = e.target.closest("button");
   if (!b || b.classList.contains("on")) return;
-  $$("#segModo button").forEach(x => x.classList.toggle("on", x === b));
+  $$("#segModo button").forEach(x => {
+    x.classList.toggle("on", x === b);
+    x.setAttribute("aria-checked", x === b);
+  });
   if (seg.activo) ponerSeguimiento(false);
   if (b.dataset.modo === "digital") {
     // El simulador sigue desde donde iba el real
     if (real && enlace.tipo === "serial") sim.ponerEn(real, !!enlace.estado?.cal);
     usarEnlace(sim);
   } else {
-    if (!serial && EnlaceSerial.disponible()) serial = new EnlaceSerial();
+    if (!serial && EnlaceSerial.disponible()) nuevoSerial();
     usarEnlace(serial || { tipo: "serial", conectado: false, estado: null, modo: null, addEventListener() {}, removeEventListener() {} });
-    if (serial && !serial.conectado) {
-      try { await serial.conectarGuardado(); } catch { /* se ve en el panel */ }
-    }
+    if (serial && !serial.conectado) conectarCon(() => serial.conectarGuardado());
   }
-});
-
-$("#bConectar").addEventListener("click", async () => {
-  try { await serial.conectar(); } catch (e) { if (e.name !== "NotFoundError") avisar(serial.error || e.message); }
-  alConexion();
 });
 
 $("#segInteraccion").addEventListener("click", e => {

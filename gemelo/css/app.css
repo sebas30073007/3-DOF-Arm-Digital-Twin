@@ -59,7 +59,6 @@ h1, h2, h3 { margin: 0; }
 .visor canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 
 .visor-barra { position: absolute; top: var(--space-lg); display: flex; gap: var(--space-sm); align-items: center; z-index: 2; }
-.visor-izq { left: var(--space-lg); }
 .visor-der { right: var(--space-lg); }
 
 .segmented {
@@ -158,8 +157,43 @@ h3:first-child { margin-top: 0; }
 .btn-sec:hover:not(:disabled) { border-color: var(--graphite); }
 .btn-texto { border: 0; background: none; padding: 0; color: var(--graphite); font-weight: 700; text-decoration: underline; cursor: pointer; font-size: 12px; }
 
-.conexion { margin-top: var(--space-md); display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); }
-.conexion p { margin: 0; font-size: 12px; color: var(--alloy); }
+.btn-negro { background: var(--graphite); color: var(--technical-white); }
+.btn-negro:hover { background: var(--graphite-raised); }
+
+/* ---- Digital / Real ---- */
+
+.modo {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin-top: var(--space-md);
+  background: var(--crema-hundido); border: 1px solid var(--linea); border-radius: var(--radius-lg);
+}
+.modo button {
+  display: flex; align-items: center; justify-content: center; gap: var(--space-sm); height: 42px;
+  border: 0; border-radius: var(--radius-md); background: transparent; cursor: pointer;
+  font-weight: 700; font-size: 14px; color: var(--alloy);
+  transition: background var(--dur-micro) var(--ease), color var(--dur-micro) var(--ease);
+}
+.modo button:hover { color: var(--graphite); background: rgba(17, 19, 23, 0.04); }
+.modo button.on { background: var(--graphite); color: var(--technical-white); box-shadow: 0 1px 3px rgba(17, 19, 23, 0.25); }
+.modo svg { width: 18px; height: 18px; flex: none; }
+/* En el botón Real: hueco = sin robot, verde = conectado */
+.punto-con { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid currentColor; opacity: 0.7; }
+.modo button.con .punto-con { background: var(--ok); border-color: var(--ok); opacity: 1; box-shadow: 0 0 0 3px rgba(26, 122, 69, 0.2); }
+
+.puerto {
+  margin-top: var(--space-sm); padding: var(--space-md); border-radius: var(--radius-md);
+  background: var(--crema-hundido); border: 1px solid var(--linea);
+}
+.puerto-fila { display: flex; gap: var(--space-sm); align-items: center; }
+.puerto-fila .selector { flex: 1; min-width: 0; margin: 0; height: 30px; }
+.puerto-fila .btn { flex: none; height: 30px; }
+.puerto-estado { display: flex; align-items: flex-start; gap: 6px; margin: var(--space-sm) 0 0; font-size: 12px; color: var(--alloy); }
+.puerto-estado i { width: 8px; height: 8px; flex: none; margin-top: 4.5px; border-radius: 50%; border: 1.5px solid currentColor; }
+.puerto-estado.ok { color: var(--ok); font-weight: 600; }
+.puerto-estado.ok i { background: var(--ok); }
+.puerto-estado.conectando { color: var(--graphite); }
+.puerto-estado.conectando i { border-color: var(--linea-fuerte); border-top-color: var(--graphite); animation: gira 0.8s linear infinite; }
+.puerto-estado.error { color: var(--sebs-signal); font-weight: 600; }
+.puerto-estado.error i { background: var(--sebs-signal); border-color: var(--sebs-signal); }
 .banda-aviso {
   margin: var(--space-md) 0 0; padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md);
   background: var(--atencion-tint); color: var(--atencion); font-size: 12px;
@@ -222,15 +256,68 @@ h3:first-child { margin-top: 0; }
 .raton li.on i { background: var(--alloy); border-color: var(--alloy); }
 .visor > .raton { position: absolute; left: var(--space-lg); bottom: var(--space-lg); z-index: 2; }
 
-.miniatura {
-  pointer-events: auto; width: 240px; border-radius: var(--radius-md); overflow: hidden;
-  border: 1px solid var(--linea); background: var(--graphite); box-shadow: 0 2px 8px rgba(17, 19, 23, 0.12);
-}
-.miniatura canvas { display: block; width: 100%; height: auto; transform: scaleX(-1); }
 .visor-pie { flex-direction: column; align-items: flex-end; left: auto; gap: var(--space-sm); max-width: 60%; }
 .visor-pie .estado-fw { max-width: 100%; }
 
 /* ---- cámara ---- */
+
+/* El cuadro cambia con el estado (data-e): off, abriendo, on, error */
+.cam-cuadro {
+  position: relative; aspect-ratio: 16 / 9; margin-bottom: var(--space-md); overflow: hidden;
+  border-radius: var(--radius-md); background: var(--crema-hundido); border: 1.5px dashed var(--linea-fuerte);
+}
+.cam-cuadro[data-e="on"], .cam-cuadro[data-e="abriendo"] { background: var(--graphite); border: 1.5px solid var(--graphite); }
+.cam-cuadro[data-e="error"] { background: var(--sebs-signal-tint); border: 1.5px solid rgba(227, 6, 19, 0.4); }
+.cam-video { position: absolute; inset: 0; display: none; }
+.cam-cuadro[data-e="on"] .cam-video { display: block; }
+.cam-video canvas { display: block; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+
+.cam-capa {
+  position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; padding: var(--space-md); text-align: center; font-size: 13px;
+}
+.cam-cuadro[data-e="off"] [data-para="off"],
+.cam-cuadro[data-e="abriendo"] [data-para="abriendo"],
+.cam-cuadro[data-e="error"] [data-para="error"] { display: flex; }
+.cam-capa svg { width: 28px; height: 28px; color: var(--alloy); }
+.cam-capa .btn { margin-top: 4px; }
+[data-para="off"] b { color: var(--alloy); }
+[data-para="abriendo"] { color: var(--technical-white); }
+[data-para="abriendo"] small { color: var(--alloy-light); font-size: 11.5px; }
+[data-para="error"] svg { color: var(--sebs-signal); }
+[data-para="error"] b { color: var(--graphite); font-weight: 600; font-size: 12.5px; max-width: 280px; }
+
+.giro {
+  width: 22px; height: 22px; border-radius: 50%; flex: none;
+  border: 2.5px solid rgba(255, 255, 255, 0.25); border-top-color: var(--technical-white);
+  animation: gira 0.8s linear infinite;
+}
+@keyframes gira { to { transform: rotate(360deg); } }
+
+.cam-barra {
+  position: absolute; left: 0; right: 0; top: 0; display: none; align-items: center; gap: var(--space-sm);
+  padding: 6px 6px 14px var(--space-sm); color: var(--technical-white); font-size: 11.5px;
+  background: linear-gradient(rgba(17, 19, 23, 0.7), rgba(17, 19, 23, 0));
+}
+.cam-cuadro[data-e="on"] .cam-barra { display: flex; }
+.cam-vivo {
+  display: inline-flex; align-items: center; gap: 5px; flex: none; padding: 2px 7px 2px 6px; border-radius: var(--radius-xs);
+  background: var(--sebs-signal); font-weight: 800; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.cam-vivo::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--technical-white); animation: late 1.2s var(--ease) infinite; }
+.cam-nombre { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.9; }
+.cam-cerrar {
+  width: 24px; height: 24px; flex: none; display: grid; place-items: center; cursor: pointer;
+  border: 0; border-radius: var(--radius-sm); background: rgba(17, 19, 23, 0.55); color: var(--technical-white);
+}
+.cam-cerrar:hover { background: var(--graphite); }
+.cam-cerrar svg { width: 12px; height: 12px; }
+.cam-modelo {
+  position: absolute; left: var(--space-sm); bottom: var(--space-sm); display: flex; align-items: center; gap: 6px;
+  padding: 4px var(--space-sm); border-radius: var(--radius-sm); background: rgba(17, 19, 23, 0.72);
+  color: var(--technical-white); font-size: 11.5px;
+}
+.cam-modelo .giro { width: 12px; height: 12px; border-width: 2px; }
 
 .camara-fila { display: flex; justify-content: space-between; align-items: center; gap: var(--space-md); }
 .camara-fila.apagada { opacity: 0.45; pointer-events: none; }
@@ -319,10 +406,8 @@ h3:first-child { margin-top: 0; }
   .visor { flex: none; height: 62vh; min-height: 360px; }
   .lateral { width: 100%; border-left: 0; border-top: 1px solid var(--linea); overflow: visible; }
   .visor-barra { top: var(--space-md); }
-  .visor-izq { left: var(--space-md); }
   .visor-der { right: var(--space-md); }
       .estado-fw { max-width: 100%; }
-  .miniatura { width: 150px; }
   .raton ul { display: none; }
   .segmented button { padding: 6px 10px; }
 }

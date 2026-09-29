@@ -68,6 +68,26 @@ export class EnlaceSim extends Base {
 
 const VID_ESPRESSIF = 0x303a;
 
+// Web Serial no deja leer el nombre del puerto (COM7, ttyACM0): solo el VID y
+// el PID del USB. Con eso se nombra lo que se conoce.
+const CONOCIDOS = {
+  "303a:1001": "ESP32-C3 · USB nativo",
+  "10c4:ea60": "CP210x",
+  "1a86:7523": "CH340",
+  "1a86:55d4": "CH9102",
+  "0403:6001": "FTDI",
+};
+
+export function nombrePuerto(p) {
+  const { usbVendorId: v, usbProductId: d } = p.getInfo();
+  if (v === undefined) return "Puerto serie";
+  const hex = n => (n ?? 0).toString(16).padStart(4, "0");
+  const id = `${hex(v)}:${hex(d)}`;
+  return `${CONOCIDOS[id] || (v === VID_ESPRESSIF ? "Espressif" : "USB")} · ${id.toUpperCase()}`;
+}
+
+export const esEspressif = p => p.getInfo().usbVendorId === VID_ESPRESSIF;
+
 export class EnlaceSerial extends Base {
   static disponible() { return "serial" in navigator; }
 
@@ -82,18 +102,26 @@ export class EnlaceSerial extends Base {
     this.cerrando = false;
     this.sondeo = null;
     this.error = "";
+    this.ultimo = null;                  // el último puerto que se abrió
+    this.vuelta = 0;                     // sondeo vigente (al reconectar no se duplica)
   }
 
   // Puertos que el usuario ya autorizó antes: se conecta sin preguntar
   async conectarGuardado() {
     const ps = await navigator.serial.getPorts();
-    const p = ps.find(x => x.getInfo().usbVendorId === VID_ESPRESSIF) || ps[0];
+    const p = ps.find(x => x === this.ultimo) || ps.find(esEspressif) || ps[0];
     if (p) await this.abrir(p);
     return !!p;
   }
 
-  async conectar() {
-    const p = await navigator.serial.requestPort({ filters: [{ usbVendorId: VID_ESPRESSIF }] });
+  // Sin filtro: la lista del navegador muestra todos los puertos con su COM
+  async buscar() {
+    await this.cambiarA(await navigator.serial.requestPort());
+  }
+
+  async cambiarA(p) {
+    if (this.puerto === p && this.conectado) return;
+    if (this.puerto) await this.cerrar();
     await this.abrir(p);
   }
 
@@ -108,7 +136,7 @@ export class EnlaceSerial extends Base {
       this.avisarConexion();
       throw new Error(this.error);
     }
-    this.puerto = p;
+    this.puerto = this.ultimo = p;
     this.cerrando = false;
     this.escritor = p.writable.getWriter();
     this.conectado = true;
@@ -188,8 +216,9 @@ export class EnlaceSerial extends Base {
 
   sondear() {
     let tModo = 0;
+    const mia = ++this.vuelta;
     const vuelta = async () => {
-      if (!this.conectado) return;
+      if (!this.conectado || mia !== this.vuelta) return;
       await this.cmd("STATE?", { silencioso: true });
       if (Date.now() - tModo > 1000) {
         tModo = Date.now();
