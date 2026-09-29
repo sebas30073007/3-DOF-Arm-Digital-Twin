@@ -1,10 +1,10 @@
-// sim.js - la ESP32 con manipulador_v7, simulada.
+// sim.js - la ESP32 con manipulador_v8, simulada.
 //
 // Habla el mismo protocolo de texto que el firmware por USB (una línea, una
 // respuesta; avisos con MSG) y se mueve como él:
 //
-//   - un eje a la vez: el loop atiende el primer eje con objetivo pendiente
-//     (B, luego E1, luego E2), igual que v7;
+//   - los ejes a la vez, como v8 (`simultaneo`); apagado imita a v7, que
+//     atiende un eje a la vez (B, luego E1, luego E2);
 //   - perfil trapezoidal en rpm del motor, con la reducción de cada eje;
 //   - si llega otro GOTO al eje que se mueve, corrige el destino al vuelo si
 //     todavía alcanza a frenar; si no, frena y lo ejecuta después;
@@ -12,8 +12,7 @@
 //   - STOP frena con rampa y vacía la cola.
 //
 // Lo que no simula: pasos perdidos, la página web del ESP32 (siempre manda la
-// PC) y el botón BOOT. `simultaneo` mueve todos los ejes a la vez, para probar
-// cómo se sentiría el firmware cuando lo haga.
+// PC) y el botón BOOT.
 
 import { FIRMWARE as F, HOME, grupo, rpmAGrados } from "./config.js";
 
@@ -41,10 +40,10 @@ export class SimESP32 {
     this.rechazos = 0;
     this.ultimo = [-1, 0, 0];          // eje, grados, segundos del último movimiento
     this.t = 0;
-    this.simultaneo = true;            // v7 real mueve uno a la vez; se cambia en Ajustes
+    this.simultaneo = true;            // como v8; apagado imita a v7 (Ajustes)
     this.escala = 1;                   // velocidad del tiempo simulado
     this.msg = "";
-    this.setMsg("Simulador listo (v7)");
+    this.setMsg("Simulador listo (v8)");
   }
 
   setMsg(t) {

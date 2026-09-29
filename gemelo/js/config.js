@@ -1,6 +1,6 @@
-// config.js - constantes del firmware manipulador_v7 y del gemelo.
+// config.js - constantes del firmware manipulador_v8 y del gemelo.
 //
-// Los números de FIRMWARE son copia de firmware/manipulador_v7/manipulador_v7.ino.
+// Los números de FIRMWARE son copia de firmware/manipulador_v8/manipulador_v8.ino.
 // Si cambian allá, cambian aquí: el simulador los usa para moverse igual que
 // la ESP32, y la interfaz para saber hasta dónde deja llegar cada eje.
 
@@ -12,9 +12,9 @@ export const FIRMWARE = {
   limMin: [-200, 0, -220],
   limMax: [20, 136.5, 0],
   pulsos: [1000, 200],          // { base, eslabones } pulsos/rev de los CL57T
-  // Valores de arranque de la página (el INO v7 arranca en {10, 20} rpm y
-  // {70, 70} rpm/s, y topa la base en 30 rpm: con el robot real, VEL B 50
-  // queda en 30 hasta que se suba VEL_MAX en el firmware)
+  // Valores de arranque del simulador (el INO arranca en {10, 20} rpm y
+  // {70, 70} rpm/s; Pólux sube a estos al terminar de calibrar). v7 topaba
+  // la base en 30 rpm; v8 la deja llegar a 50.
   vel: [50, 100],               // rpm del motor, por grupo { base, eslabones }
   acel: [200, 350],             // rpm/s
   velMin: 2, velMax: [50, 120],

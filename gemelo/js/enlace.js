@@ -6,7 +6,8 @@
 //   await enlace.cmd("GOTO E1 45")  -> "OK GOTO" | "ERR ..." | null (sin respuesta)
 //   enlace.estado                   último STATE (el JSON del firmware)
 //   enlace.modo                     "PC" | "WEB" (quién tiene el control)
-//   eventos: "estado", "log" {d: tx|rx|msg|sys, x}, "conexion"
+//   eventos: "estado", "log" {d: tx|rx|msg|sys, x}, "conexion",
+//            "crudo" {d: tx|rx, x, sondeo}: cada línea tal cual pasa por el cable
 //
 // El real va por Web Serial (Chrome o Edge de escritorio, sobre https o
 // localhost). Replica lo que hacía manipulador/robot.py: una línea, espera la
@@ -22,6 +23,7 @@ class Base extends EventTarget {
     this.conectado = false;
   }
   log(d, x) { this.dispatchEvent(new CustomEvent("log", { detail: { d, x, t: Date.now() } })); }
+  crudo(d, x, sondeo = false) { this.dispatchEvent(new CustomEvent("crudo", { detail: { d, x, sondeo, t: Date.now() } })); }
   avisarEstado() { this.dispatchEvent(new Event("estado")); }
   avisarConexion() { this.dispatchEvent(new Event("conexion")); }
 }
@@ -32,7 +34,7 @@ export class EnlaceSim extends Base {
   constructor() {
     super();
     this.tipo = "sim";
-    this.sim = new SimESP32(l => this.log("msg", l.slice(4)));
+    this.sim = new SimESP32(l => { this.crudo("rx", l); this.log("msg", l.slice(4)); });
     this.modo = "PC";
     this.conectado = true;
     this.estado = this.sim.estado();
@@ -50,7 +52,9 @@ export class EnlaceSim extends Base {
 
   async cmd(linea, { silencioso = false } = {}) {
     if (!silencioso) this.log("tx", linea);
+    this.crudo("tx", linea, silencioso);
     const r = this.sim.linea(linea);
+    if (r) this.crudo("rx", r, silencioso);
     if (!silencioso && r) this.log("rx", r);
     return r;
   }
@@ -176,6 +180,7 @@ export class EnlaceSerial extends Base {
   }
 
   recibir(linea) {
+    this.crudo("rx", linea, !!this.esperando && this.esperandoSondeo && !linea.startsWith("MSG "));
     if (linea.startsWith("MSG ")) { this.log("msg", linea.slice(4)); return; }
     if (linea.startsWith("STATE ")) {
       try { this.estado = JSON.parse(linea.slice(6)); this.avisarEstado(); } catch { /* línea cortada */ }
@@ -197,9 +202,11 @@ export class EnlaceSerial extends Base {
       if (!silencioso) this.log("tx", linea);
       const respuesta = new Promise(res => {
         this.esperando = res;
+        this.esperandoSondeo = silencioso;
         setTimeout(() => { if (this.esperando === res) { this.esperando = null; res(null); } }, timeout);
       });
       try {
+        this.crudo("tx", linea, silencioso);     // antes de escribir: la respuesta puede llegar primero
         await this.escritor.write(new TextEncoder().encode(linea + "\n"));
       } catch (e) {
         this.esperando = null;

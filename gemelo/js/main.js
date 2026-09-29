@@ -69,11 +69,13 @@ function usarEnlace(nuevo) {
   if (enlace) {
     enlace.removeEventListener("estado", alEstado);
     enlace.removeEventListener("log", alLog);
+    enlace.removeEventListener("crudo", alCrudo);
     enlace.removeEventListener("conexion", alConexion);
   }
   enlace = nuevo;
   enlace.addEventListener("estado", alEstado);
   enlace.addEventListener("log", alLog);
+  enlace.addEventListener("crudo", alCrudo);
   enlace.addEventListener("conexion", alConexion);
   real = null;
   realVisto = null;
@@ -188,6 +190,7 @@ async function conectarCon(fn) {
 }
 
 async function pintarPuertos() {
+  pintarFuenteTerminal();
   const con = !!serial?.conectado;
   const bReal = $('#segModo [data-modo="real"]');
   bReal.classList.toggle("con", con);
@@ -562,6 +565,73 @@ $("#bCamara").addEventListener("click", encenderCamara);
 $("#bCamReintentar").addEventListener("click", encenderCamara);
 $("#bCamCerrar").addEventListener("click", () => camara.cerrar());
 
+// Ventana de la cámara: el mismo cuadro sale del panel al visor, arriba a la
+// izquierda y al doble de ancho; se arrastra desde cualquier parte y cambia
+// de tamaño desde la esquina. Mientras está fuera, el panel solo deja
+// Manos/Personas y Seguir. Al cerrar la cámara regresa al panel.
+const ventana = { fuera: false, arrastre: null };
+const cuadroCam = $("#camCuadro");
+const MARGEN_VENTANA = 16, ANCHO_MIN_VENTANA = 220;
+
+function ponerVentana(si) {
+  if (si === ventana.fuera) return;
+  if (si) {
+    const ancho = cuadroCam.getBoundingClientRect().width * 2;
+    $("#visor").appendChild(cuadroCam);
+    cuadroCam.classList.add("ventana");
+    cuadroCam.style.left = cuadroCam.style.top = MARGEN_VENTANA + "px";
+    cuadroCam.style.width = Math.min(ancho, $("#visor").clientWidth - 2 * MARGEN_VENTANA) + "px";
+  } else {
+    $("#camLugar").after(cuadroCam);
+    cuadroCam.classList.remove("ventana");
+    cuadroCam.style.left = cuadroCam.style.top = cuadroCam.style.width = "";
+  }
+  ventana.fuera = si;
+  $("#panelCamara").classList.toggle("fuera", si);
+  const b = $("#bCamVentana");
+  b.title = si ? "Regresar al panel" : "Abrir en ventana";
+  b.setAttribute("aria-label", b.title);
+}
+$("#bCamVentana").addEventListener("click", () => ponerVentana(!ventana.fuera));
+
+// Mantiene la ventana dentro del visor
+function acomodarVentana(x, y, w) {
+  const vis = $("#visor");
+  w = Math.max(ANCHO_MIN_VENTANA, Math.min(w, vis.clientWidth - 2 * MARGEN_VENTANA));
+  const h = cuadroCam.offsetHeight * (w / cuadroCam.offsetWidth);
+  x = Math.max(0, Math.min(x, vis.clientWidth - w));
+  y = Math.max(0, Math.min(y, vis.clientHeight - h));
+  Object.assign(cuadroCam.style, { left: x + "px", top: y + "px", width: w + "px" });
+}
+
+cuadroCam.addEventListener("pointerdown", e => {
+  if (!ventana.fuera || e.button !== 0 || e.target.closest("button, select")) return;
+  e.preventDefault();
+  cuadroCam.setPointerCapture(e.pointerId);
+  ventana.arrastre = {
+    tamano: e.target.id === "camTirador",
+    x0: e.clientX, y0: e.clientY,
+    left: cuadroCam.offsetLeft, top: cuadroCam.offsetTop, w: cuadroCam.offsetWidth,
+  };
+  cuadroCam.classList.add(ventana.arrastre.tamano ? "redimensionando" : "moviendo");
+});
+cuadroCam.addEventListener("pointermove", e => {
+  const a = ventana.arrastre;
+  if (!a) return;
+  const dx = e.clientX - a.x0, dy = e.clientY - a.y0;
+  if (a.tamano) acomodarVentana(a.left, a.top, a.w + dx);
+  else acomodarVentana(a.left + dx, a.top + dy, a.w);
+});
+const soltarVentana = () => {
+  ventana.arrastre = null;
+  cuadroCam.classList.remove("moviendo", "redimensionando");
+};
+cuadroCam.addEventListener("pointerup", soltarVentana);
+cuadroCam.addEventListener("pointercancel", soltarVentana);
+new ResizeObserver(() => {
+  if (ventana.fuera) acomodarVentana(cuadroCam.offsetLeft, cuadroCam.offsetTop, cuadroCam.offsetWidth);
+}).observe($("#visor"));
+
 $("#camSelect").addEventListener("change", e => abrirCamara(e.target.value).catch(() => {}));
 
 async function abrirCamara(id) {
@@ -595,6 +665,7 @@ camara.addEventListener("cambio", () => {
     b.classList.toggle("cargando", camara.cargando === b.dataset.v);
   }
   $(".camara-fila").classList.toggle("apagada", !abierta);
+  if (!abierta && !camara.abriendo) ponerVentana(false);
   if (!abierta && seg.activo) ponerSeguimiento(false);
   pintarVision();
 });
@@ -868,18 +939,77 @@ function calibracionCambio() {
 }
 pintarCalibracion();
 
-// ----------------------------------------------------------- consola --
+// ---------------------------------------------------------- terminal --
 
+// Cada línea que pasa por el enlace, tal cual y al momento: TX lo que manda
+// la PC (rojo), RX lo que contesta el módulo (verde). El sondeo (STATE? y
+// MODE? cada 150 ms) se puede esconder. Las líneas se juntan y se pintan una
+// vez por cuadro para que el flujo del sondeo no trabe la página.
 const consola = $("#consola");
-function alLog(ev) {
-  const { d, x } = ev.detail;
-  const div = document.createElement("div");
-  div.className = d;
-  div.textContent = ({ tx: "→ ", rx: "← ", msg: "· ", sys: "# " }[d] || "") + x;
+const MAX_LINEAS = 1500;
+const term = { cola: [], sondeo: true, pausa: false, pendiente: false };
+
+function alCrudo(ev) { encolarLinea(ev.detail); }
+function alLog(ev) { if (ev.detail.d === "sys") encolarLinea(ev.detail); }
+
+function encolarLinea(l) {
+  term.cola.push(l);
+  if (term.cola.length > MAX_LINEAS) term.cola.splice(0, term.cola.length - MAX_LINEAS);
+  if (!term.pausa && !term.pendiente) { term.pendiente = true; requestAnimationFrame(pintarTerminal); }
+}
+
+const hora = t => {
+  const d = new Date(t), dos = n => String(n).padStart(2, "0");
+  return `${dos(d.getHours())}:${dos(d.getMinutes())}:${dos(d.getSeconds())}.${String(d.getMilliseconds()).padStart(3, "0")}`;
+};
+
+function pintarTerminal() {
+  term.pendiente = false;
+  if (term.pausa) return;
+  const lineas = term.cola.splice(0);
   const abajo = consola.scrollTop + consola.clientHeight >= consola.scrollHeight - 4;
-  consola.appendChild(div);
-  while (consola.childElementCount > 400) consola.firstElementChild.remove();
+  const frag = document.createDocumentFragment();
+  for (const { d, x, t, sondeo } of lineas) {
+    const div = document.createElement("div");
+    div.className = "l " + d + (sondeo ? " sondeo" : "");
+    const tm = document.createElement("time");
+    tm.textContent = hora(t);
+    const et = document.createElement("b");
+    et.textContent = d === "sys" ? "··" : d.toUpperCase();
+    const tx = document.createElement("span");
+    tx.textContent = x;
+    div.append(tm, et, tx);
+    frag.appendChild(div);
+  }
+  consola.appendChild(frag);
+  const sobran = consola.childElementCount - MAX_LINEAS;
+  for (let i = 0; i < sobran; i++) consola.firstElementChild.remove();
   if (abajo) consola.scrollTop = consola.scrollHeight;
+}
+
+function botonTerminal(id, alPulsar) {
+  const b = $(id);
+  b.addEventListener("click", () => {
+    const on = alPulsar();
+    if (on !== undefined) { b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); }
+  });
+}
+botonTerminal("#termSondeo", () => {
+  term.sondeo = !term.sondeo;
+  consola.classList.toggle("sin-sondeo", !term.sondeo);
+  return term.sondeo;
+});
+botonTerminal("#termPausa", () => {
+  term.pausa = !term.pausa;
+  if (!term.pausa) pintarTerminal();
+  return term.pausa;
+});
+botonTerminal("#termLimpiar", () => { consola.textContent = ""; term.cola = []; });
+
+function pintarFuenteTerminal() {
+  $("#termFuente").textContent = enlace?.tipo === "sim"
+    ? "Simulador · firmware en el navegador"
+    : serial?.conectado ? `USB · ${nombrePuerto(serial.puerto)} · 115200` : "USB · sin conexión";
 }
 
 const historial = [];

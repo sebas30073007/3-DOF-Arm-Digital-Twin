@@ -7,7 +7,7 @@ tres partes:
 | Parte | Carpeta | Qué es |
 |---|---|---|
 | **Pólux** | `gemelo/` | Gemelo digital en el navegador: modelo 3D del CAD, simulador del firmware, control del robot real por Web Serial y seguimiento con cámara. Página estática para GitHub Pages. |
-| Firmware | `firmware/manipulador_v7/` | Sketch de la ESP32-C3: perfiles trapezoidales, calibración con switches, página web propia y protocolo serial. |
+| Firmware | `firmware/manipulador_v8/` | Sketch de la ESP32-C3: los tres ejes a la vez, perfiles trapezoidales, calibración con switches, página web propia y protocolo serial. `manipulador_v7/` es la versión anterior (un eje a la vez). |
 | Panel local | `app.py`, `manipulador/`, `web/` | Panel en Python: webcam, YOLO y MediaPipe, y control por serial. |
 
 **Pólux en línea:** https://sebas30073007.github.io/3-DOF-Arm-Digital-Twin/
@@ -120,9 +120,10 @@ marcador pasa de rojo a gris con "pausa" cuando falta algún dedo.
 Se ajusta en *Visión → Seguimiento → Control con la mano*: dedos, rango de E1,
 zona muerta, invertir E1, o apagar E1 para mover solo la base.
 
-**Limitación del firmware.** v7 mueve un eje a la vez (el `loop` atiende el
-primer eje con objetivo pendiente). Con base y E1 activos, los movimientos se
-turnan y se ven escalonados; además E1 es lento (20 rpm de motor ≈ 4.8°/s).
+**Firmware.** v7 mueve un eje a la vez (el `loop` atiende el primer eje con
+objetivo pendiente): con base y E1 activos, los movimientos se turnan y se ven
+escalonados. v8 mueve los tres ejes a la vez, cada uno con su generador de
+pasos y su corrección de destino al vuelo.
 
 | Geometría | Cuándo | Cálculo |
 |---|---|---|

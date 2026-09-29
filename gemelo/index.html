@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pólux · gemelo digital</title>
-<meta name="description" content="Pólux, gemelo digital del brazo de 3 GDL: simulador del firmware v7, control del robot real por USB y seguimiento con cámara, desde el navegador.">
+<meta name="description" content="Pólux, gemelo digital del brazo de 3 GDL: simulador del firmware v8, control del robot real por USB y seguimiento con cámara, desde el navegador.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -19,6 +19,7 @@
 <body>
 <div class="app">
 
+  <div class="centro">
   <main class="visor" id="visor">
     <div class="visor-barra visor-der">
       <div class="segmented" id="segInteraccion" role="group" aria-label="Cómo mover">
@@ -68,6 +69,27 @@
     <div class="cargando" id="cargando">Cargando modelo…</div>
   </main>
 
+  <!-- Terminal: lo que pasa por el enlace, crudo y en vivo.
+       Rojo = TX (la PC manda), verde = RX (responde el módulo). -->
+  <section class="terminal" aria-label="Terminal">
+    <header class="term-cab">
+      <span class="term-titulo">Terminal</span>
+      <span class="term-fuente" id="termFuente"></span>
+      <span class="term-leyenda"><i class="tx">TX</i><i class="rx">RX</i></span>
+      <div class="term-acciones">
+        <button class="term-btn on" id="termSondeo" aria-pressed="true" title="STATE? y MODE? que Pólux pide solo, cada 150 ms">Sondeo</button>
+        <button class="term-btn" id="termPausa" aria-pressed="false">Pausa</button>
+        <button class="term-btn" id="termLimpiar">Limpiar</button>
+      </div>
+    </header>
+    <div class="term-cuerpo" id="consola" aria-live="off"></div>
+    <form class="term-linea" id="consolaForm">
+      <span aria-hidden="true">›</span>
+      <input id="consolaInput" autocomplete="off" spellcheck="false" placeholder="GOTO E1 45" aria-label="Comando">
+    </form>
+  </section>
+  </div>
+
   <aside class="lateral">
 
     <section class="panel panel-global">
@@ -76,7 +98,7 @@
         <button class="btn btn-alto" id="bAlto" title="Detener todo (Esc)">ALTO</button>
       </header>
       <div class="modo" id="segModo" role="radiogroup" aria-label="Robot">
-        <button class="on" data-modo="digital" role="radio" aria-checked="true" title="ESP32 simulada en el navegador (firmware v7)">
+        <button class="on" data-modo="digital" role="radio" aria-checked="true" title="ESP32 simulada en el navegador (firmware v8)">
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3.5" width="15" height="10" rx="1.5"/><path d="M7 17h6M10 13.5V17"/></svg>
           <span>Digital</span>
         </button>
@@ -111,8 +133,9 @@
       <div id="ejes"></div>
     </section>
 
-    <section class="panel">
+    <section class="panel panel-camara" id="panelCamara">
       <header class="panel-cab compacto"><h2>Cámara</h2></header>
+      <div id="camLugar" hidden></div>
       <div class="cam-cuadro" id="camCuadro" data-e="off">
         <div class="cam-video" id="miniatura"></div>
         <div class="cam-capa" data-para="off">
@@ -133,11 +156,16 @@
         <div class="cam-barra">
           <span class="cam-vivo">En vivo</span>
           <span class="cam-nombre" id="camNombre"></span>
+          <button class="cam-cerrar" id="bCamVentana" title="Abrir en ventana" aria-label="Abrir en ventana">
+            <svg class="i-sacar" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2.5h4v4M13.5 2.5 9 7M6.5 13.5h-4v-4M2.5 13.5 7 9"/></svg>
+            <svg class="i-meter" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 6.5h-4v-4M9.5 6.5 14 2M2.5 9.5h4v4M6.5 9.5 2 14"/></svg>
+          </button>
           <button class="cam-cerrar" id="bCamCerrar" title="Cerrar cámara" aria-label="Cerrar cámara">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
           </button>
         </div>
         <div class="cam-modelo" id="camModelo" hidden><span class="giro" aria-hidden="true"></span><span></span></div>
+        <div class="cam-tirador" id="camTirador" title="Cambiar tamaño" aria-hidden="true"></div>
       </div>
       <select id="camSelect" class="selector" hidden title="Cámara"></select>
       <div class="camara-fila apagada">
@@ -182,7 +210,7 @@
 
         <div id="ajustesSim">
           <h3>Simulador</h3>
-          <label class="interruptor" title="v7 mueve un eje a la vez">
+          <label class="interruptor" title="Encendido: como v8, los ejes a la vez. Apagado: como v7, uno a la vez">
             <input type="checkbox" id="simSimultaneo" role="switch" checked>
             <span class="switch" aria-hidden="true"><i></i></span>
             <span>Ejes a la vez</span>
@@ -201,14 +229,6 @@
         <div class="gemelo-fila" data-eje="2"><span>Eslabón 2</span><label><input type="checkbox" class="invertir"> invertir</label><label>offset <input type="number" class="offset" step="0.5"> °</label></div>
         <button class="btn-texto" id="bCalDefecto">Restablecer</button>
       </div>
-    </details>
-
-    <details class="panel plegable">
-      <summary class="panel-cab compacto"><h2>Consola</h2><span class="chevron">▾</span></summary>
-      <div class="consola" id="consola" aria-live="off"></div>
-      <form class="consola-linea" id="consolaForm">
-        <input id="consolaInput" class="mono" autocomplete="off" spellcheck="false" placeholder="GOTO E1 45">
-      </form>
     </details>
 
   </aside>
