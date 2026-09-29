@@ -85,6 +85,10 @@ function alEstado() {
   const s = enlace.estado;
   if (!s) return;
   real = [s.b, s.c, s.m];
+  // Sin calibrar, E1 y E2 son pasos contados desde que encendió, no la pose
+  // física: al buscar los switches pasan de 0 y el gemelo se doblaba contra
+  // la base o bajo el piso. Se quedan en su rango hasta que calibre.
+  if (!s.cal) real = real.map((v, e) => (e ? limitar(e, v) : v));
   if (!realVisto || enlace.tipo === "sim") realVisto = real.slice();
   const ahora = performance.now();
 
@@ -888,7 +892,8 @@ function avisar(texto) {
 }
 
 function fmt(v, dec = 0) {
-  return (v < 0 ? "−" : "") + Math.abs(v).toFixed(dec) + "°";
+  const t = Math.abs(v).toFixed(dec);
+  return (v < 0 && Number(t) !== 0 ? "−" : "") + t + "°";
 }
 
 // Al cerrar la pestaña con el robot real, que no se quede moviendo

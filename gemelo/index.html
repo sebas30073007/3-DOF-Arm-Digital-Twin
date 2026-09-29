@@ -50,6 +50,16 @@
     </div>
 
     <div class="visor-pie">
+      <div class="punto-etiqueta" title="Punto de agarre en mm · X lateral, Y altura sobre el piso, Z hacia adelante con la base en 0°">
+        <span class="punto-titulo">Punto de agarre</span>
+        <div class="xyz">
+          <label><span>X</span><input type="number" id="pX" step="1"></label>
+          <label><span>Y</span><input type="number" id="pY" step="1"></label>
+          <label><span>Z</span><input type="number" id="pZ" step="1"></label>
+          <em>mm</em>
+        </div>
+        <span class="alcance" id="alcance"></span>
+      </div>
       <div class="estado-fw" id="estadoFw" title="Último mensaje del firmware">
         <span class="ocupado" id="ocupado">quieto</span>
         <span class="mono" id="msgFw">—</span>
@@ -88,20 +98,17 @@
     </section>
 
     <section class="panel">
-      <header class="panel-cab compacto"><h2>Articulaciones</h2></header>
-      <div id="ejes"></div>
+      <header class="panel-cab compacto"><h2>Rutinas</h2></header>
+      <div class="fila-botones">
+        <button class="btn btn-sec" data-rutina="CAL" title="Busca los switches de E1 y E2 y deja el brazo en HOME">Calibrar</button>
+        <button class="btn btn-sec" data-rutina="HOME">HOME</button>
+        <button class="btn btn-sec" data-rutina="SALUDO">Saludo</button>
+      </div>
     </section>
 
     <section class="panel">
-      <header class="panel-cab compacto">
-        <h2>Punto de agarre</h2>
-        <span class="alcance" id="alcance"></span>
-      </header>
-      <div class="xyz" title="mm · X lateral, Y altura sobre el piso, Z hacia adelante con la base en 0°">
-        <label><span>X</span><input type="number" id="pX" step="1"><em>mm</em></label>
-        <label><span>Y</span><input type="number" id="pY" step="1"><em>mm</em></label>
-        <label><span>Z</span><input type="number" id="pZ" step="1"><em>mm</em></label>
-      </div>
+      <header class="panel-cab compacto"><h2>Articulaciones</h2></header>
+      <div id="ejes"></div>
     </section>
 
     <section class="panel">
@@ -156,15 +163,6 @@
           <label title="Campo de visión horizontal">FOV<input type="number" data-k="fov" step="1" min="20" max="120"></label>
         </div>
       </details>
-    </section>
-
-    <section class="panel">
-      <header class="panel-cab compacto"><h2>Rutinas</h2></header>
-      <div class="fila-botones">
-        <button class="btn btn-sec" data-rutina="CAL" title="Busca los switches de E1 y E2 y deja el brazo en HOME">Calibrar</button>
-        <button class="btn btn-sec" data-rutina="HOME">HOME</button>
-        <button class="btn btn-sec" data-rutina="SALUDO">Saludo</button>
-      </div>
     </section>
 
     <details class="panel plegable">

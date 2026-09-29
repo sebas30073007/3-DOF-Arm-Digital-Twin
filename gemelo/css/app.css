@@ -340,17 +340,25 @@ h3:first-child { margin-top: 0; }
 
 /* ---- punto ---- */
 
-.xyz { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-sm); }
-.xyz label {
-  display: flex; align-items: center; gap: 4px; border: 1px solid var(--linea); border-radius: var(--radius-md);
-  padding: 4px var(--space-sm); background: var(--crema-hundido);
+/* Etiqueta del visor, abajo a la derecha, sobre el estado del firmware */
+.punto-etiqueta {
+  pointer-events: auto; display: flex; flex-direction: column; gap: 2px;
+  background: var(--technical-white); border: 1px solid var(--linea); border-radius: var(--radius-md);
+  padding: 6px var(--space-md) 5px; box-shadow: 0 1px 2px rgba(17, 19, 23, 0.05);
 }
-.xyz label:focus-within { border-color: var(--graphite); background: var(--technical-white); }
+.punto-titulo { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--alloy); }
+.xyz { display: flex; align-items: center; gap: var(--space-sm); }
+.xyz label { display: inline-flex; align-items: center; gap: 3px; }
 .xyz span { font-weight: 700; font-size: 12px; }
-.xyz input { width: 100%; min-width: 0; border: 0; background: transparent; font-family: var(--font-mono); font-size: 13px; text-align: right; padding: 2px 0; }
-.xyz input:focus { outline: none; }
+.xyz input {
+  width: 50px; border: 1px solid transparent; border-radius: var(--radius-xs); padding: 1px 3px; background: transparent;
+  font-family: var(--font-mono); font-size: 13px; text-align: right; -moz-appearance: textfield;
+}
+.xyz input::-webkit-inner-spin-button, .xyz input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.xyz input:hover, .xyz input:focus { border-color: var(--linea-fuerte); background: var(--crema-hundido); outline: none; }
 .xyz em { font-style: normal; font-size: 11px; color: var(--alloy); }
-.alcance { font-size: 12px; font-weight: 600; color: var(--alloy); }
+.alcance:empty { display: none; }
+.alcance { font-size: 11.5px; font-weight: 600; color: var(--alloy); }
 .alcance.fuera { color: var(--graphite); }
 .alcance.fuera::before { content: "⚠ "; color: var(--sebs-signal); }
 
