@@ -156,6 +156,13 @@ cd gemelo
 python -m http.server 8765      # http://localhost:8765 (no abre con file://)
 ```
 
+- **Acomodo** (piel Laboratorio de fablab-tools, que viene de OPI en claro): barra arriba con
+  Digital | Real y **ALTO**; el visor con el punto de agarre en píldoras (se editan)
+  y la terminal plegable debajo; a la derecha el panel con pestañas **Mover ·
+  Rutinas · Cámara** y el botón redondo de **Ajustes**, que abre una hoja desde
+  abajo. La etiqueta junto a *Mover* da el estado (Quieto, Moviendo o la rutina, Sin
+  calibrar, Control en el ESP32, Sin conexión); el último mensaje del firmware va en
+  su tooltip. Azul = posición real; el rojo queda solo para ALTO.
 - **Digital**: una ESP32 simulada en el navegador (`js/sim.js`) que habla el
   mismo protocolo que v8 y se mueve igual: los tres ejes a la vez, perfil
   trapezoidal con la reducción de cada eje, corrección del destino al vuelo, CAL,
@@ -165,7 +172,7 @@ python -m http.server 8765      # http://localhost:8765 (no abre con file://)
   Es la misma lógica que `manipulador/robot.py`: STATE? cada 150 ms y una línea por
   comando. Solo un programa puede abrir el COM: cierra Thonny y el panel de Python.
 - **Mover**: rieles copiados de la página del ESP32 (pulgar blanco = referencia,
-  punto rojo = real, barra de HOME al real, casita en HOME; E2 va de 0 a −220
+  punto azul = real, barra de HOME al real, casita en HOME; E2 va de 0 a −220
   de izquierda a derecha), arrastrar las piezas en el visor (al pasar el cursor
   aparece el arco del eje con su rango), o el modo **Punto**: una esfera en el
   punto de agarre con flechas XYZ y cinemática inversa.

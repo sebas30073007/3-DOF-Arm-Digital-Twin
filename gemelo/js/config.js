@@ -68,7 +68,9 @@ export const GEMELO_DEFECTO = {
 
 // Cámara en el mundo del gemelo: mm, con X lateral, Y altura, Z hacia adelante.
 // giro (en Y) 0 = mira hacia +Z, lejos del robot; inclinación + = hacia arriba.
-export const CAMARA_DEFECTO = { x: 0, y: 0, z: 450, giro: 0, inclinacion: 15, fov: 60 };
+// ganHorario: multiplica el giro de la base hacia el sentido horario (ángulos
+// negativos) al seguir a una persona.
+export const CAMARA_DEFECTO = { x: 0, y: 0, z: 450, giro: 0, inclinacion: 15, fov: 60, ganHorario: 1 };
 
 const CLAVE = "gemelo.calibracion.v2";
 

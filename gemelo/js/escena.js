@@ -32,13 +32,14 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { FIRMWARE, limitar } from "./config.js";
 
 const COLOR = {
-  fondo: 0xf2f1ed,
+  fondo: 0xe5e7eb,         // visor de la piel Laboratorio (fablab-tools)
   grafito: 0x111317,
   alloy: 0x6b6f76,
-  senal: 0xe30613,
+  dato: 0x2563eb,           // azul = real, eje activo y punto de agarre (el rojo queda para ALTO)
+  aviso: 0xc2410c,          // naranja = el punto no se alcanza
   fantasma: 0x9aa0a8,
-  reticula: 0xdcd9d1,
-  reticulaFina: 0xe6e3dc,
+  reticula: 0xcfd3d9,
+  reticulaFina: 0xdadde2,
 };
 const GRUPOS = ["fijo", "base", "eslabon1", "eslabon2", "dedo1", "dedo2"];
 const EJE_DE_GRUPO = { base: 0, eslabon1: 1, eslabon2: 2, dedo1: 2, dedo2: 2 };
@@ -104,7 +105,7 @@ export class Escena {
   }
 
   luces() {
-    const hemi = new THREE.HemisphereLight(0xffffff, 0xcbc6ba, 1.1);
+    const hemi = new THREE.HemisphereLight(0xffffff, 0xc6cad1, 1.1);
     this.scene.add(hemi);
     const sol = (this.sol = new THREE.DirectionalLight(0xffffff, 2.2));
     sol.position.set(1.0, 2.2, 1.4);
@@ -123,7 +124,7 @@ export class Escena {
   piso() {
     const sombra = new THREE.Mesh(
       new THREE.CircleGeometry(4, 64).rotateX(-Math.PI / 2),
-      new THREE.ShadowMaterial({ color: 0x3a342a, opacity: 0.16 }),
+      new THREE.ShadowMaterial({ color: 0x1f2937, opacity: 0.16 }),
     );
     sombra.receiveShadow = true;
     this.scene.add(sombra);
@@ -319,7 +320,7 @@ export class Escena {
       m.userData.signo = signo;
       return m;
     });
-    const real = new THREE.Mesh(new THREE.CircleGeometry(0.008, 24), nuevoMatGuia(COLOR.senal, 0.95));
+    const real = new THREE.Mesh(new THREE.CircleGeometry(0.008, 24), nuevoMatGuia(COLOR.dato, 0.95));
     grupo.add(rango, ...marcas, aguja, ...flechas, real);
     for (const o of grupo.children) o.renderOrder = 10;
     return { e, grupo, padre, local, radio, aguja, flechas, real };
@@ -347,7 +348,7 @@ export class Escena {
       f.position.set(Math.cos(a) * radio, Math.sin(a) * radio, 0);
       // el cono apunta a +Y; lo giro hacia la tangente en el sentido de avance
       f.rotation.z = a + (s * sentidoModelo > 0 ? 0 : Math.PI);
-      f.material.color.setHex(activo ? COLOR.senal : COLOR.grafito);
+      f.material.color.setHex(activo ? COLOR.dato : COLOR.grafito);
     }
     const aReal = this.cin.aModelo(e, this.real[e]);
     // El punto del real se dibuja en el marco del fantasma: para E1 y E2
@@ -359,7 +360,7 @@ export class Escena {
   // ------------------------------------------------------------ punto --
 
   crearPunto() {
-    const esfera = new THREE.Mesh(new THREE.SphereGeometry(0.011, 32, 16), new THREE.MeshStandardMaterial({ color: COLOR.senal, roughness: 0.4 }));
+    const esfera = new THREE.Mesh(new THREE.SphereGeometry(0.011, 32, 16), new THREE.MeshStandardMaterial({ color: COLOR.dato, roughness: 0.4 }));
     esfera.visible = false;
     esfera.renderOrder = 11;
     this.scene.add(esfera);
@@ -369,7 +370,7 @@ export class Escena {
     const huella = new THREE.Mesh(new THREE.RingGeometry(0.008, 0.013, 32).rotateX(-Math.PI / 2), nuevoMatGuia(COLOR.alloy, 0.8));
     // Del TCP de la referencia a la esfera, cuando no la alcanza
     const faltaGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
-    const falta = new THREE.Line(faltaGeo, new THREE.LineDashedMaterial({ color: COLOR.senal, dashSize: 0.012, gapSize: 0.008 }));
+    const falta = new THREE.Line(faltaGeo, new THREE.LineDashedMaterial({ color: COLOR.aviso, dashSize: 0.012, gapSize: 0.008 }));
     for (const o of [linea, huella, falta]) { o.visible = false; this.scene.add(o); }
 
     const tc = new TransformControls(this.camera, this.renderer.domElement);
@@ -439,9 +440,9 @@ export class Escena {
     const rayo = new THREE.Line(rayoGeo, new THREE.LineDashedMaterial({ color: COLOR.alloy, dashSize: 0.015, gapSize: 0.01 }));
     // Objetivo del seguimiento: a dónde va el punto de agarre (la mano mueve
     // al objetivo en relativo, así que no coincide con la mano)
-    const objetivo = new THREE.Mesh(new THREE.SphereGeometry(0.012, 24, 12), new THREE.MeshStandardMaterial({ color: COLOR.senal, roughness: 0.4 }));
+    const objetivo = new THREE.Mesh(new THREE.SphereGeometry(0.012, 24, 12), new THREE.MeshStandardMaterial({ color: COLOR.dato, roughness: 0.4 }));
     const ligaGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
-    const liga = new THREE.Line(ligaGeo, new THREE.LineDashedMaterial({ color: COLOR.senal, dashSize: 0.012, gapSize: 0.01, transparent: true, opacity: 0.6 }));
+    const liga = new THREE.Line(ligaGeo, new THREE.LineDashedMaterial({ color: COLOR.dato, dashSize: 0.012, gapSize: 0.01, transparent: true, opacity: 0.6 }));
     mano.visible = rayo.visible = objetivo.visible = liga.visible = false;
     this.scene.add(mano, rayo, objetivo, liga);
     this.cam = { rig, lineas, plano, textura: null, mano, rayo, objetivo, liga, pose: null, aspecto: 16 / 9 };
@@ -664,7 +665,7 @@ export class Escena {
       falta.geometry.attributes.position.needsUpdate = true;
       falta.computeLineDistances();
     }
-    esfera.material.color.setHex(this.punto.fuera ? COLOR.alloy : COLOR.senal);
+    esfera.material.color.setHex(this.punto.fuera ? COLOR.alloy : COLOR.dato);
   }
 }
 

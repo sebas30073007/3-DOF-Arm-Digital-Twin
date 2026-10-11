@@ -155,13 +155,32 @@ function alConexion() {
   $("#ajustesSim").hidden = !esSim;
   pintarPuertos();
   if (con && !esSim) pegarRef(500);
-  if (!con) {
-    $("#ocupado").classList.remove("activo");
-    $("#ocupado").textContent = "sin robot";
-    $("#msgFw").textContent = "—";
-    $("#avisoCal").hidden = $("#avisoWeb").hidden = true;
-  }
+  pintarChip();
   actualizarBloqueo();
+}
+
+// Chip de la cabecera: con qué robot se habla y en qué estado está. Verde =
+// quieto y listo, azul latiendo = moviéndose, naranja = falta algo (calibrar,
+// Control PC), hueco = sin robot, rojo = error de conexión. El último mensaje
+// del firmware va en el title.
+function pintarChip() {
+  const chip = $("#chipConexion");
+  const s = enlace?.estado;
+  const quien = enlace?.tipo === "sim" ? "Simulación" : "Real";
+  let est = "on", t;
+  if (enlace?.tipo !== "sim" && !serial?.conectado) {
+    if (conectando) { est = "espera"; t = "Conectando…"; }
+    else if (serial?.error) { est = "error"; t = "Error de conexión"; }
+    else { est = "off"; t = "Sin conexión"; }
+  } else if (!s) { est = "espera"; t = `${quien} · Conectando…`; }
+  else if (enlace.modo === "WEB") { est = "aviso"; t = `${quien} · Control en el ESP32`; }
+  else if (s.ocu) { est = "run"; t = `${quien} · ${rutina?.nombre || (s.cal ? "Moviendo" : "Calibrando…")}`; }
+  else if (!s.cal) { est = "aviso"; t = `${quien} · Sin calibrar`; }
+  else t = `${quien} · Quieto`;
+  chip.dataset.s = est;
+  $("#chipTexto").textContent = t;
+  const puerto = enlace?.tipo !== "sim" && serial?.conectado ? nombrePuerto(serial.puerto) + " · " : "";
+  chip.title = puerto + (s?.msg || "");
 }
 
 // ------------------------------------------------------------ puertos --
@@ -191,6 +210,7 @@ async function conectarCon(fn) {
 
 async function pintarPuertos() {
   pintarFuenteTerminal();
+  pintarChip();
   const con = !!serial?.conectado;
   const bReal = $('#segModo [data-modo="real"]');
   bReal.classList.toggle("con", con);
@@ -484,12 +504,7 @@ function pintarReal() {
 
 function pintarEstado(s) {
   pintarRef();
-  const oc = $("#ocupado");
-  oc.classList.toggle("activo", !!s.ocu);
-  oc.textContent = s.ocu ? "moviendo" : "quieto";
-  $("#msgFw").textContent = s.msg || "—";
-  $("#avisoCal").hidden = !!s.cal;
-  $("#avisoWeb").hidden = enlace.modo !== "WEB";
+  pintarChip();
   // Igual que la página del ESP32: sin calibrar, E1 y E2 no se mueven; con
   // un switch pisado, el jog hacia el switch se bloquea.
   filas.forEach((f, e) => {
@@ -748,8 +763,16 @@ function procesarVision(r) {
   } else if (r.personas.length) {
     // Sin mano: la base mira a la persona más grande (al pecho, a 1.5 m)
     const per = [...r.personas].sort((a, b) => b.h * b.w - a.h * a.w)[0];
-    const pp = escena.puntoDesdeImagen(per.x + per.w / 2, per.y + per.h * 0.3, 1.5);
-    const b = cin.baseHacia(pp);
+    // El giro se mide respecto al centro de la imagen y va hacia el mismo lado
+    // que la persona (geométrico): te mueves a tu izquierda y la base te sigue.
+    // Invertido giraba al revés, en el gemelo y en el real. Hacia el sentido
+    // horario (ángulos negativos, donde la base tiene 200° de recorrido) se
+    // multiplica por la ganancia de Ajustes de la cámara.
+    const v = per.y + per.h * 0.3;
+    const centro = cin.baseHacia(escena.puntoDesdeImagen(0.5, v, 1.5), true);
+    let giro = cin.baseHacia(escena.puntoDesdeImagen(per.x + per.w / 2, v, 1.5), true) - centro;
+    if (giro < 0) giro *= poseCam.ganHorario;
+    const b = limitar(0, centro + giro);
     if (Math.abs(b - ref[0]) > 1.5) cambiarRef([b, ref[1], ref[2]], { origen: "seguir" });
   }
 }
@@ -812,8 +835,9 @@ async function alto() {
 }
 
 $("#bAlto").addEventListener("click", alto);
+// Esc siempre detiene el brazo, y además cierra la hoja si hay una abierta
 window.addEventListener("keydown", e => {
-  if (e.key === "Escape") { e.preventDefault(); alto(); }
+  if (e.key === "Escape") { e.preventDefault(); alto(); cerrarAjustes(); }
 });
 
 // Poses clave de cada rutina, a partir de la pose actual. HOME va un eje a la
@@ -845,9 +869,10 @@ function framesRutina(cmd, q) {
 // Botones de las rutinas por pasos, después de Calibrar / HOME / Saludo
 for (const ru of RUTINAS) {
   const b = document.createElement("button");
-  b.className = "btn btn-sec";
+  b.className = "accion";
   b.dataset.rutina = "RUTINA " + ru.cmd;
-  b.textContent = ru.boton || ru.nombre;
+  b.innerHTML = `<span class="accion__ico"><svg class="ico" aria-hidden="true"><use href="#i-pasos"/></svg></span>`;
+  b.append(ru.boton || ru.nombre);
   b.title = ru.nombre;
   $("#rutinasBotones").appendChild(b);
 }
@@ -858,7 +883,8 @@ for (const b of $$("[data-rutina]")) {
     if (seg.activo) ponerSeguimiento(false);
     if (cmd !== "CAL" && !enlace.estado?.cal) { avisar("Calibra primero"); return; }
     pegarRef(0);
-    rutina = { frames: framesRutina(cmd, real), i: 0, t0: performance.now(), vioOcupado: false };
+    const nombre = cmd === "CAL" ? "Calibrando…" : b.title || b.textContent.trim();
+    rutina = { frames: framesRutina(cmd, real), i: 0, t0: performance.now(), vioOcupado: false, nombre };
     const r = await enlace.cmd(cmd);
     if (r && r.startsWith("ERR")) {
       rutina = null;
@@ -893,7 +919,10 @@ $("#segModo").addEventListener("click", e => {
 $("#segInteraccion").addEventListener("click", e => {
   const b = e.target.closest("button");
   if (!b) return;
-  $$("#segInteraccion button").forEach(x => x.classList.toggle("on", x === b));
+  $$("#segInteraccion button").forEach(x => {
+    x.classList.toggle("on", x === b);
+    x.setAttribute("aria-checked", x === b);
+  });
   escena.setModo(b.dataset.i);
   puntoObjetivo = null;
   pintarAlcance(null);
@@ -1053,6 +1082,79 @@ $("#consolaInput").addEventListener("keydown", e => {
   iHist = Math.max(0, Math.min(historial.length, iHist + (e.key === "ArrowUp" ? -1 : 1)));
   e.target.value = historial[iHist] ?? "";
 });
+
+// ------------------------------------------------------------ panel --
+
+// Lo que se recuerda por navegador (pestaña, terminal plegada). Si el
+// almacenamiento no está, la página funciona igual.
+const recordar = {
+  get(k, def) { try { const v = localStorage.getItem("polux." + k); return v == null ? def : JSON.parse(v); } catch { return def; } },
+  set(k, v) { try { localStorage.setItem("polux." + k, JSON.stringify(v)); } catch { /* sin almacenamiento */ } },
+};
+const reducido = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// Pestañas de la barra inferior: Mover · Rutinas · Cámara. El ícono se rellena en la elegida.
+function irATab(id, { animar = true } = {}) {
+  for (const b of $$(".navinf__pildora [data-tab]")) {
+    const si = b.dataset.tab === id;
+    if (si) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+    const ico = { mover: "brazo", rutinas: "rutinas", camara: "camara" }[b.dataset.tab];
+    b.querySelector("use").setAttribute("href", `#i-${ico}${si ? "-on" : ""}`);
+  }
+  for (const p of $$(".pag")) {
+    const si = p.dataset.pag === id;
+    if (si && p.hidden && animar) {
+      p.classList.remove("pag--funde");
+      void p.offsetWidth;
+      p.classList.add("pag--funde");
+    }
+    p.hidden = !si;
+  }
+  $("#vista").scrollTop = 0;
+  recordar.set("tab", id);
+}
+for (const b of $$(".navinf__pildora [data-tab]")) b.addEventListener("click", () => irATab(b.dataset.tab));
+irATab(recordar.get("tab", "mover"), { animar: false });
+
+// Ajustes: hoja que sube desde abajo dentro del panel. El foco entra, no se
+// escapa con Tab y regresa al botón al cerrar.
+const hojaAj = $("#hojaAjustes");
+let hojaPrevio = null, timerHoja = null;
+function abrirAjustes() {
+  clearTimeout(timerHoja);
+  hojaPrevio = document.activeElement;
+  hojaAj.hidden = false;
+  void hojaAj.offsetWidth;
+  hojaAj.classList.add("abierta");
+  hojaAj.querySelector(".btn-icono[data-cerrar]").focus({ preventScroll: true });
+}
+function cerrarAjustes() {
+  if (hojaAj.hidden || !hojaAj.classList.contains("abierta")) return;
+  hojaAj.classList.remove("abierta");
+  timerHoja = setTimeout(() => { hojaAj.hidden = true; }, reducido() ? 0 : 320);
+  if (hojaPrevio && document.contains(hojaPrevio)) hojaPrevio.focus({ preventScroll: true });
+}
+$("#bAjustes").addEventListener("click", abrirAjustes);
+for (const b of $$("#hojaAjustes [data-cerrar]")) b.addEventListener("click", cerrarAjustes);
+hojaAj.addEventListener("keydown", e => {
+  if (e.key !== "Tab") return;
+  const f = $$("#hojaAjustes button:not([disabled]), #hojaAjustes input:not([disabled])").filter(x => x.offsetParent);
+  if (!f.length) return;
+  if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); f[f.length - 1].focus(); }
+  else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
+});
+
+// La terminal se pliega a su barra; el visor se queda con el espacio
+function plegarTerminal(si) {
+  $("#terminal").classList.toggle("plegada", si);
+  const b = $("#termPlegar");
+  b.setAttribute("aria-expanded", !si);
+  b.title = si ? "Abrir la terminal" : "Plegar la terminal";
+  if (!si) consola.scrollTop = consola.scrollHeight;
+  recordar.set("terminalPlegada", si);
+}
+$("#termPlegar").addEventListener("click", () => plegarTerminal(!$("#terminal").classList.contains("plegada")));
+plegarTerminal(recordar.get("terminalPlegada", false));
 
 // ------------------------------------------------------------ varios --
 

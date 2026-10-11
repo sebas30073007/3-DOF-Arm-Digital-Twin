@@ -91,11 +91,13 @@ export class Cinematica {
   }
 
   // Ángulo de base (firmware, dentro de límites) que deja el punto en el plano del brazo, de frente
-  baseHacia(p) {
+  // (sinLimite: el ángulo sin recortar a los límites, para medir diferencias)
+  baseHacia(p, sinLimite = false) {
     const d = this.tcp[0] + this.p1[0] + this.p2[0];
     const rho = Math.hypot(p[0], p[2]);
     const theta = Math.atan2(p[0], p[2]) - (rho > Math.abs(d) ? Math.asin(d / rho) : 0);
-    return limitar(0, this.envolver(0, this.aFirmware(0, theta)));
+    const b = this.envolver(0, this.aFirmware(0, theta));
+    return sinLimite ? b : limitar(0, b);
   }
 
   envolver(e, v) {
