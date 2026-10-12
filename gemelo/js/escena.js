@@ -92,6 +92,9 @@ export class Escena {
     c.maxPolarAngle = Math.PI * 0.495;    // no pasar bajo el piso
     c.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN };
     c.update();
+    // Mientras el usuario no mueva la vista, al cambiar el visor se vuelve a encuadrar
+    this.vistaMovida = false;
+    c.addEventListener("start", () => { this.vistaMovida = true; });
 
     this.luces();
     this.piso();
@@ -151,10 +154,17 @@ export class Escena {
     this.renderer.setSize(w, h);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    if (!this.vistaMovida) this.encuadrar();
+  }
+
+  // Visor en retrato (aspecto < 1.3): la cámara se aleja en proporción, hasta ×2.2
+  alejamiento() {
+    const a = this.camera.aspect;
+    return a < 1.3 ? Math.min(1.3 / a, 2.2) : 1;
   }
 
   // Con la cámara visible se aleja y se va de lado para que quepan el robot,
-  // la cámara y su cuadro de video.
+  // la cámara y su cuadro de video. En visor angosto se aleja además.
   encuadrar() {
     const conCam = this.cam?.rig.visible;
     if (conCam) {
@@ -165,6 +175,9 @@ export class Escena {
       this.camera.position.copy(VISTA_INICIAL.pos);
       this.controles.target.copy(VISTA_INICIAL.mira);
     }
+    const mira = this.controles.target;
+    this.camera.position.sub(mira).multiplyScalar(this.alejamiento()).add(mira);
+    this.vistaMovida = false;
     this.controles.update();
   }
 

@@ -1145,16 +1145,30 @@ hojaAj.addEventListener("keydown", e => {
 });
 
 // La terminal se pliega a su barra; el visor se queda con el espacio
-function plegarTerminal(si) {
+function plegarTerminal(si, guardar = true) {
   $("#terminal").classList.toggle("plegada", si);
   const b = $("#termPlegar");
   b.setAttribute("aria-expanded", !si);
   b.title = si ? "Abrir la terminal" : "Plegar la terminal";
   if (!si) consola.scrollTop = consola.scrollHeight;
-  recordar.set("terminalPlegada", si);
+  if (guardar) recordar.set("terminalPlegada", si);
 }
 $("#termPlegar").addEventListener("click", () => plegarTerminal(!$("#terminal").classList.contains("plegada")));
-plegarTerminal(recordar.get("terminalPlegada", false));
+// En teléfono siempre arranca plegada (la pantalla es para el 3D y el panel); en pantallas
+// anchas, como se dejó la última vez
+plegarTerminal(innerWidth < 720 || recordar.get("terminalPlegada", false), false);
+
+// Alto del visor en teléfono: normal o grande. El botón solo se ve bajo 720 px.
+function agrandarVisor(si) {
+  $(".app").classList.toggle("visor-grande", si);
+  const b = $("#bVisorTam"), t = si ? "Achicar vista 3D" : "Agrandar vista 3D";
+  b.setAttribute("aria-pressed", si);
+  b.setAttribute("aria-label", t);
+  b.title = t;
+  recordar.set("visorGrande", si);
+}
+$("#bVisorTam").addEventListener("click", () => agrandarVisor(!$(".app").classList.contains("visor-grande")));
+agrandarVisor(recordar.get("visorGrande", false));
 
 // ------------------------------------------------------------ varios --
 

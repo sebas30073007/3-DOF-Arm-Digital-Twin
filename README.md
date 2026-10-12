@@ -163,6 +163,9 @@ python -m http.server 8765      # http://localhost:8765 (no abre con file://)
   abajo. La etiqueta junto a *Mover* da el estado (Quieto, Moviendo o la rutina, Sin
   calibrar, Control en el ESP32, Sin conexión); el último mensaje del firmware va en
   su tooltip. Azul = posición real; el rojo queda solo para ALTO.
+- **Anchos**: desde 1100 px tal cual; de 720 a 1099 px el panel se angosta y Digital | Real
+  queda solo con ícono; bajo 720 px todo va en columna sin scroll de página (solo se desplaza
+  el panel) y un botón junto a encuadrar agranda o achica el visor (se recuerda).
 - **Digital**: una ESP32 simulada en el navegador (`js/sim.js`) que habla el
   mismo protocolo que v8 y se mueve igual: los tres ejes a la vez, perfil
   trapezoidal con la reducción de cada eje, corrección del destino al vuelo, CAL,

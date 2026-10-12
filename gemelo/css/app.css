@@ -119,6 +119,10 @@ h1, h2, h3 { margin: 0; }
   border: 0; border-radius: 50%; background: var(--tarjeta); box-shadow: var(--flota-sombra); cursor: pointer;
 }
 .btn-flota:hover { background: var(--tarjeta-2); }
+/* Alto del visor (solo en teléfono): junto a encuadrar */
+.btn-flota--tam { display: none; right: 64px; }
+.btn-flota--tam .i-achicar, .visor-grande .btn-flota--tam .i-agrandar { display: none; }
+.visor-grande .btn-flota--tam .i-achicar { display: block; }
 
 .seg--flota { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 2; background: var(--tarjeta); box-shadow: var(--flota-sombra); }
 
@@ -383,7 +387,7 @@ h1, h2, h3 { margin: 0; }
 .fila-ajuste { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 44px; }
 
 /* ================= Barra inferior flotante ================= */
-.navinf { position: absolute; left: 12px; right: 16px; bottom: 12px; z-index: 6; display: flex; align-items: center; gap: 10px; }
+.navinf { position: absolute; left: 12px; right: 16px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 6; display: flex; align-items: center; gap: 10px; }
 .navinf__pildora { flex: 1; display: flex; gap: 2px; padding: 5px; border-radius: 999px; background: var(--tarjeta); box-shadow: var(--flota-sombra); }
 .navinf__pildora button {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 52px;
@@ -444,18 +448,55 @@ h1, h2, h3 { margin: 0; }
 .term-linea input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: #FFFFFF; font-family: var(--font-mono); font-size: 12.5px; caret-color: var(--term-tx); }
 .term-linea input::placeholder { color: #4B5058; }
 
-/* ================= Móvil ================= */
-@media (max-width: 900px) {
-  body { overflow: auto; }
-  .app { height: auto; grid-template-columns: 1fr; grid-template-rows: auto auto auto; }
-  .barra { flex-wrap: wrap; padding: 8px 12px; row-gap: 8px; }
+/* ================= Anchos: Laboratorio angosto =================
+   ≥1100 tal cual · 720–1099 lado a lado con panel angosto · <720 teléfono en columna,
+   sin scroll de página: solo se desplaza el panel */
+@media (max-width: 1099px) {
+  :root { --panel-w: clamp(320px, 36vw, 400px); }
   .barra__sub { display: none; }
-  .centro { padding: 0 12px 12px; }
-  .visor { flex: none; height: 58vh; min-height: 340px; }
-  .terminal { height: 200px; }
-  .panel { min-height: 90vh; }
-  .pag { padding: 4px 12px 112px; }
-  .raton ul { display: none; }
+  /* Digital | Real solo con ícono; el texto queda para lectores de pantalla */
+  .seg--modo button { padding: 0 12px; }
+  .seg--modo button > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .vel-fila, .gemelo-fila { grid-template-columns: minmax(0, 1fr) 84px 84px; gap: 6px; }
+  .fila-nom { overflow-wrap: anywhere; }
+  .camara-fila { flex-wrap: wrap; row-gap: 4px; }
+}
+@media (max-width: 719px) {
+  .app {
+    --visor-h: 44dvh;
+    height: 100vh; height: 100dvh;
+    grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr);
+  }
+  .app.visor-grande { --visor-h: 66dvh; }
+  .barra { min-height: calc(56px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) 12px 0 16px; }
+  .btn-alto { flex: none; padding: 0 20px; }
+  .centro { gap: 8px; padding: 0 12px 8px; }
+  .visor { flex: none; height: max(200px, var(--visor-h)); }
+  /* Abierta toma ~35 % de la altura, sin dejar al panel sin su barra */
+  .terminal { height: max(120px, min(35dvh, calc(100dvh - var(--visor-h) - 220px))); }
+  .term-cab { gap: 8px; }
+  .term-btn { padding: 0 8px; }
+  .visor__coords { gap: 4px; max-width: calc(100% - 128px); }
+  .pildora-dato { height: 28px; padding: 0 4px 0 10px; font-size: 12px; }
+  .pildora-dato input { width: 46px; height: 22px; padding: 0 4px; font-size: 12px; }
+  .pildora-dato:has(input)::after { margin-right: 4px; font-size: 10px; }
+  .pildora-dato--alcance { padding: 0 10px; font-size: 12px; }
+  .btn-flota--tam { display: grid; }
+  .raton { display: none; }
+  .pag { padding: 4px 12px calc(112px + env(safe-area-inset-bottom)); }
+  /* Las hojas cubren toda la pantalla, no solo el panel */
+  .hoja-capa { position: fixed; z-index: 20; }
+  .hoja { max-height: 88dvh; }
+  .hoja__cuerpo { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+}
+/* Táctil: todo lo que se toca mide 44 px o más */
+@media (pointer: coarse) {
+  .seg button, .chip, .term-plegar, .term-btn { min-height: 44px; }
+  .jog, .cam-cerrar { width: 44px; height: 44px; }
+  .eje-num { height: 44px; }
+}
+@media (hover: none) {
+  .raton { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .pag--funde { animation: none; }
